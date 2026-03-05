@@ -8,3 +8,4 @@ createRoot(document.getElementById('root')!).render(
     <App/>
   </StrictMode>,
 )
+if (localStorage.getItem('carcare-app-storage')?.includes('dark')) { document.documentElement.classList.add('dark'); }

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* บอก Tailwind v4 ให้ใช้ class .dark ในการ trigger dark mode */
+@variant dark (&:where(.dark, .dark *));
+
 /* คุณสามารถตั้งค่า Theme หรือ Custom Colors ของ v4 ได้ที่นี่เลย */
 @theme {
   --color-primary-50: #eff6ff;
@@ -12,7 +15,7 @@
 /* ตั้งค่าพื้นฐานสำหรับ Dark/Light mode */
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 transition-colors duration-200;
+    @apply bg-slate-50 text-slate-900 transition-colors duration-500;
   }
   .dark body {
     @apply bg-slate-900 text-slate-50;

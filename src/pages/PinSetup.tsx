@@ -1,59 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CarFront, Menu, Lock, ShieldCheck, Delete, ArrowRight, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/useAuthStore';
+import { hashPin, isValidPin, saveProfilePinHash, setStoredPinHash } from '../utils/pin';
+import { usePinKeypad } from '../hooks/usePinKeypad';
 
 export default function PinSetup() {
+  const navigate = useNavigate();
+  const session = useAuthStore((state) => state.session);
+  const setPinVerified = useAuthStore((state) => state.setPinVerified);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // ควบคุมขั้นตอน: 1 = ตั้งรหัส, 2 = ยืนยันรหัส
   const [step, setStep] = useState<1 | 2>(1);
-  
-  // เก็บค่า PIN ที่กำลังพิมพ์
-  const [pin, setPin] = useState<string>('');
   
   // เก็บค่า PIN จากขั้นตอนที่ 1 เพื่อเอามาเทียบในขั้นตอนที่ 2
   const [firstPin, setFirstPin] = useState<string>('');
 
-  // ฟังก์ชันกดตัวเลข
-  const handleNumberClick = (num: string) => {
-    if (pin.length < 6) {
-      setPin((prev) => prev + num);
-    }
-  };
-
-  // ฟังก์ชันลบตัวเลข
-  const handleBackspace = () => {
-    setPin((prev) => prev.slice(0, -1));
-  };
-
-  // รองรับการพิมพ์จากคีย์บอร์ด
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (/^[0-9]$/.test(e.key)) {
-        handleNumberClick(e.key);
-      } else if (e.key === 'Backspace') {
-        handleBackspace();
+  const { pin, setPin, handleNumberClick, handleBackspace } = usePinKeypad({
+    isDisabled: isSubmitting,
+    onEnter: () => {
+      if (step === 1) {
+        handleNextStep();
+      } else {
+        void handleSubmit();
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pin]);
+    }
+  });
 
   // เมื่อกดปุ่ม "ถัดไป" (จากขั้นตอนที่ 1)
-  const handleNextStep = () => {
-    if (pin.length !== 6) return;
+  function handleNextStep() {
+    if (!isValidPin(pin)) return;
     setFirstPin(pin); // จำรหัสแรกไว้
     setPin('');       // ล้างช่องใส่รหัสเพื่อเตรียมพิมพ์ยืนยัน
     setStep(2);       // ไปสเตป 2
-  };
+  }
 
   // เมื่อกดปุ่ม "ย้อนกลับ" (จากขั้นตอนที่ 2)
-  const handleBackStep = () => {
+  function handleBackStep() {
     setStep(1);
     setPin(firstPin); // เอารหัสที่เคยพิมพ์ไว้กลับมาโชว์
-  };
+  }
 
   // เมื่อกดปุ่ม "ยืนยัน" (ขั้นตอนสุดท้าย)
-  const handleSubmit = () => {
-    if (pin.length !== 6) return;
+  async function handleSubmit() {
+    if (!isValidPin(pin)) return;
     
     if (pin !== firstPin) {
       toast.error('รหัส PIN ไม่ตรงกัน กรุณาลองใหม่');
@@ -61,10 +53,29 @@ export default function PinSetup() {
       return;
     }
 
-    // TODO: ส่งรหัส PIN (firstPin) ไปบันทึกในฐานข้อมูล / Zustand
-    toast.success('ตั้งค่ารหัส PIN สำเร็จ!');
-    console.log('Final PIN to save:', firstPin);
-  };
+    const userId = session?.user?.id;
+    if (!userId) {
+      toast.error('ไม่พบเซสชันผู้ใช้ กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const pinHash = await hashPin(pin);
+      await saveProfilePinHash(userId, pinHash);
+      setStoredPinHash(userId, pinHash);
+
+      setPinVerified(true);
+      toast.success('ตั้งค่ารหัส PIN สำเร็จ!');
+      navigate('/dashboard', { replace: true });
+    } catch (error: any) {
+      console.error('Failed to save PIN:', error);
+      toast.error(`บันทึกไม่สำเร็จ: ${error.message || 'โปรดตรวจสอบฐานข้อมูลหรือ RLS'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="bg-slate-50 dark:bg-[#101922] font-sans min-h-screen flex flex-col overflow-x-hidden text-slate-900 dark:text-slate-100 antialiased selection:bg-primary-500/30 selection:text-primary-600 transition-colors duration-200">
@@ -170,7 +181,7 @@ export default function PinSetup() {
             {step === 1 ? (
               <button 
                 onClick={handleNextStep}
-                disabled={pin.length !== 6}
+                disabled={pin.length !== 6 || isSubmitting}
                 className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg h-12 px-5 bg-primary-600 hover:bg-primary-700 text-white text-base font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>ถัดไป</span>
@@ -180,14 +191,15 @@ export default function PinSetup() {
               <>
                 <button 
                   onClick={handleSubmit}
-                  disabled={pin.length !== 6}
+                  disabled={pin.length !== 6 || isSubmitting}
                   className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg h-12 px-5 bg-primary-600 hover:bg-primary-700 text-white text-base font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ShieldCheck size={20} />
-                  <span>ยืนยันและเข้าสู่ระบบ</span>
+                  <span>{isSubmitting ? 'กำลังบันทึก...' : 'ยืนยันและเข้าสู่ระบบ'}</span>
                 </button>
                 <button 
                   onClick={handleBackStep}
+                  disabled={isSubmitting}
                   className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg h-12 px-5 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-base font-bold transition-colors"
                 >
                   <ArrowLeft size={20} />

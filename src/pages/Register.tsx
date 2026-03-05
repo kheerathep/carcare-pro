@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { CarFront, Menu, User, Mail, EyeOff, Eye, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Link, useNavigate } from 'react-router-dom';
+import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
 
 export default function Register() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
@@ -11,7 +14,8 @@ export default function Register() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: '',
   });
 
   // ฟังก์ชันอัปเดตข้อมูลในฟอร์ม
@@ -19,17 +23,13 @@ export default function Register() {
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
-  // 1. ฟังก์ชันสมัครด้วย Google (เหมือนหน้า Login)
+  // 1. ฟังก์ชันสมัครด้วย Google
   const handleGoogleSignUp = async () => {
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin },
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      await handleGoogleAuth(true);
+    } catch (error) {
+      // error is already handled by toast in handleGoogleAuth
     } finally {
       setIsLoading(false);
     }
@@ -48,12 +48,19 @@ export default function Register() {
       toast.error('รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร');
       return;
     }
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน');
+      return;
+    }
 
     try {
       setIsLoading(true);
       
       // ส่งข้อมูลไปสมัครที่ Supabase
-      const { data, error } = await supabase.auth.signUp({
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -65,11 +72,18 @@ export default function Register() {
 
       if (error) throw error;
 
-      // ถ้าสมัครสำเร็จ ปกติ Supabase จะส่งอีเมลไปให้กดยืนยัน (Email Confirmation)
+      if (session) {
+        toast.success('สมัครสมาชิกสำเร็จ กรุณาตั้งค่า PIN เพื่อเริ่มใช้งาน');
+        navigate('/pin-setup', { replace: true });
+        return;
+      }
+
+      // ถ้าสมัครสำเร็จแต่ยังไม่มี session ปกติ Supabase จะส่งอีเมลยืนยัน
       toast.success('สมัครสมาชิกสำเร็จ! กรุณาตรวจสอบอีเมลของคุณเพื่อยืนยันบัญชี', { duration: 5000 });
+      navigate('/login', { replace: true });
       
     } catch (error: any) {
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+      toast.error(mapAuthErrorMessage(error.message, true));
     } finally {
       setIsLoading(false);
     }
@@ -93,9 +107,12 @@ export default function Register() {
             <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 text-sm font-medium transition-colors" href="#">เกี่ยวกับเรา</a>
             <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 text-sm font-medium transition-colors" href="#">ติดต่อเรา</a>
           </div>
-          <button className="flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-6 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold transition-colors shadow-sm">
+          <Link
+            to="/login"
+            className="flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-6 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold transition-colors shadow-sm"
+          >
             เข้าสู่ระบบ
-          </button>
+          </Link>
         </div>
 
         {/* Mobile Menu Icon */}
@@ -202,6 +219,28 @@ export default function Register() {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 pl-1">รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร</p>
               </div>
 
+              {/* Confirm Password Input */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">ยืนยันรหัสผ่าน</label>
+                <div className="relative group">
+                  <input
+                    id="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                    placeholder="ยืนยันรหัสผ่านของคุณ"
+                    type={showPassword ? 'text' : 'password'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-0 top-0 h-full px-4 flex items-center justify-center text-slate-400 hover:text-primary-500 transition-colors cursor-pointer"
+                  >
+                    {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                  </button>
+                </div>
+              </div>
+
               {/* Submit Button */}
               <button 
                 type="submit"
@@ -217,7 +256,7 @@ export default function Register() {
             <div className="pt-2 text-center">
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 มีบัญชีอยู่แล้ว? 
-                <a className="text-primary-600 dark:text-primary-500 hover:text-primary-700 font-semibold transition-colors ml-1" href="#">เข้าสู่ระบบ</a>
+                <Link className="text-primary-600 dark:text-primary-500 hover:text-primary-700 font-semibold transition-colors ml-1" to="/login">เข้าสู่ระบบ</Link>
               </p>
             </div>
           </div>

@@ -2,24 +2,49 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Menu, CarFront, EyeOff, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Link, useNavigate } from 'react-router-dom';
+import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
 
 export default function Login() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // ฟังก์ชันสำหรับ Login ด้วย Google
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
+      await handleGoogleAuth(false);
+    } catch (error) {
+      // error is already handled by toast in handleGoogleAuth
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!email || !password) {
+      toast.error('กรุณากรอกอีเมลและรหัสผ่าน');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
       if (error) throw error;
+
+      toast.success('เข้าสู่ระบบสำเร็จ');
+      navigate('/pin-setup', { replace: true });
     } catch (error: any) {
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      toast.error(mapAuthErrorMessage(error.message));
     } finally {
       setIsLoading(false);
     }
@@ -44,9 +69,12 @@ export default function Login() {
             <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors text-sm font-medium leading-normal" href="#">เกี่ยวกับเรา</a>
             <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors text-sm font-medium leading-normal" href="#">ติดต่อเรา</a>
           </div>
-          <button className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary-600 hover:bg-primary-700 transition-colors text-white text-sm font-bold leading-normal tracking-[0.015em]">
+          <Link
+            to="/register"
+            className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary-600 hover:bg-primary-700 transition-colors text-white text-sm font-bold leading-normal tracking-[0.015em]"
+          >
             <span className="truncate">สมัครสมาชิก</span>
-          </button>
+          </Link>
         </div>
         
         <div className="md:hidden text-slate-900 dark:text-white">
@@ -71,13 +99,13 @@ export default function Login() {
           </div>
 
           <div className="p-6 pt-2">
-            <form className="flex flex-col gap-5 mt-4" onSubmit={(e) => e.preventDefault()}>
+            <form className="flex flex-col gap-5 mt-4" onSubmit={handleEmailLogin}>
               
               {/* Email Input */}
               <div className="flex flex-col gap-2">
                 <label className="text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal" htmlFor="email">อีเมล</label>
                 <div className="relative">
-                  <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal" id="email" placeholder="example@email.com" type="email" />
+                  <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal" id="email" placeholder="example@email.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
               </div>
 
@@ -88,7 +116,7 @@ export default function Login() {
                   <a className="text-primary-600 text-xs font-medium hover:underline dark:text-primary-500" href="#">ลืมรหัสผ่าน?</a>
                 </div>
                 <div className="relative flex w-full items-stretch">
-                  <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-r-none text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal border-r-0" id="password" placeholder="••••••••" type="password" />
+                  <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-r-none text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal border-r-0" id="password" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                   <button className="flex items-center justify-center px-4 rounded-r-lg border border-l-0 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" type="button">
                     <EyeOff size={20} />
                   </button>
@@ -96,8 +124,8 @@ export default function Login() {
               </div>
 
               {/* Submit Button */}
-              <button className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-primary-600 hover:bg-primary-700 transition-all text-white text-base font-bold leading-normal tracking-[0.015em] shadow-md shadow-primary-500/20" type="submit">
-                <span className="truncate">เข้าสู่ระบบ</span>
+              <button className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-primary-600 hover:bg-primary-700 transition-all text-white text-base font-bold leading-normal tracking-[0.015em] shadow-md shadow-primary-500/20 disabled:opacity-50" type="submit" disabled={isLoading}>
+                <span className="truncate">{isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</span>
               </button>
 
               {/* Divider */}
@@ -125,10 +153,10 @@ export default function Login() {
 
               {/* PIN Login Link (เตรียมไว้สำหรับอนาคต) */}
               <div className="flex justify-center mt-2">
-                <button type="button" className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 dark:text-primary-500 dark:hover:text-primary-400 transition-colors text-sm font-medium">
+                <Link to="/login-pin" className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 dark:text-primary-500 dark:hover:text-primary-400 transition-colors text-sm font-medium">
                   <Lock size={16} />
                   เข้าใช้งานด้วยรหัส PIN
-                </button>
+                </Link>
               </div>
             </form>
           </div>
@@ -136,7 +164,7 @@ export default function Login() {
           {/* Footer Area inside card */}
           <div className="px-6 py-4 bg-slate-50 dark:bg-[#111a22] border-t border-slate-200 dark:border-slate-800 flex justify-center">
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              ยังไม่มีบัญชี? <a className="text-primary-600 dark:text-primary-500 font-semibold hover:underline ml-1" href="../pages/Register.tsx">สมัครสมาชิก</a>
+              ยังไม่มีบัญชี? <Link className="text-primary-600 dark:text-primary-500 font-semibold hover:underline ml-1" to="/register">สมัครสมาชิก</Link>
             </p>
           </div>
           
