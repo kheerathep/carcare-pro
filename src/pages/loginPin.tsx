@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { CarFront, Delete, Lock, Mail, X } from 'lucide-react';
+import { CarFront, Delete, Lock, Mail, X, Sun, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { useAppStore } from '../store/useAppStore';
 import { getProfilePinHash, getStoredPinHash, hashPin, isValidPin, setStoredPinHash } from '../utils/pin';
 import { usePinKeypad } from '../hooks/usePinKeypad';
 
 export default function LoginPin() {
   const navigate = useNavigate();
+  const { theme, setTheme } = useAppStore();
   const session = useAuthStore((state) => state.session);
   const isPinVerified = useAuthStore((state) => state.isPinVerified);
   const setPinVerified = useAuthStore((state) => state.setPinVerified);
@@ -101,6 +103,14 @@ export default function LoginPin() {
           <CarFront size={28} />
           <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">CarCare Pro</h2>
         </div>
+
+        <button
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors ml-auto mr-4"
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+
         <div className="flex gap-3">
           <Link
             to="/register"

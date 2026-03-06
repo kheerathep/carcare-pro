@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Menu, CarFront, EyeOff, Lock } from 'lucide-react';
+import { Menu, CarFront, EyeOff, Eye, Lock, Sun, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
+import { useAppStore } from '../store/useAppStore';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useAppStore();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // ฟังก์ชันสำหรับ Login ด้วย Google
   const handleGoogleLogin = async () => {
@@ -77,6 +80,13 @@ export default function Login() {
           </Link>
         </div>
         
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors ml-auto md:ml-4 mr-2 md:mr-0"
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+
         <div className="md:hidden text-slate-900 dark:text-white">
           <Menu size={24} />
         </div>
@@ -113,12 +123,16 @@ export default function Login() {
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center">
                   <label className="text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal" htmlFor="password">รหัสผ่าน</label>
-                  <a className="text-primary-600 text-xs font-medium hover:underline dark:text-primary-500" href="#">ลืมรหัสผ่าน?</a>
+                  <Link className="text-primary-600 text-xs font-medium hover:underline dark:text-primary-500" to="/forgot-password">ลืมรหัสผ่าน?</Link>
                 </div>
                 <div className="relative flex w-full items-stretch">
-                  <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-r-none text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal border-r-0" id="password" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  <button className="flex items-center justify-center px-4 rounded-r-lg border border-l-0 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" type="button">
-                    <EyeOff size={20} />
+                  <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-r-none text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal border-r-0" id="password" placeholder="••••••••" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <button 
+                    className="flex items-center justify-center px-4 rounded-r-lg border border-l-0 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer" 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                   </button>
                 </div>
               </div>

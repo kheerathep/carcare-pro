@@ -7,6 +7,10 @@ import LoginPin from "../pages/loginPin";
 import Register from "../pages/Register";
 import PinSetup from "../pages/PinSetup";
 import Dashboard from '../pages/Dashboard';
+import DashboardLayout from '../components/layout/DashboardLayout';
+import ForgotPassword from '../pages/ForgotPassword';
+import ResetPassword from '../pages/ResetPassword';
+
 // ----------------------------------------------------
 // 1. Components สำหรับ "ยามเฝ้าประตู" (Guards)
 // ----------------------------------------------------
@@ -18,7 +22,7 @@ const PinSetupGuard = () => {
   const { isPinVerified } = useAuthStore();
 
   if (isPinVerified) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;
@@ -71,6 +75,8 @@ export default function AppRouter() {
         <Route path="/login" element={<Login />} />
         <Route path="/login-pin" element={<LoginPin />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* กลุ่มที่ 1: Protected (ต้องล็อกอินก่อน) */}
         <Route element={<AuthGuard />}>
@@ -80,11 +86,15 @@ export default function AppRouter() {
           </Route>
 
           {/* 2.2 หน้า Dashboard & อื่นๆ (ต้องผ่าน PIN Guard อีกชั้น) */}
-          <Route element={<PinGuard />}>
-            <Route path="/dashboard" element={<Dashboard />} />
+        <Route element={<PinGuard />}>
+          {/* หุ้มหน้าเว็บทั้งหมดด้วย DashboardLayout */}
+          <Route element={<DashboardLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            {/* ในอนาคตคุณสามารถเพิ่มหน้าอื่นๆ ตรงนี้ได้เลย แล้วมันจะมี Sidebar/Header ให้อัตโนมัติ! */}
             {/* <Route path="/vehicles" element={<VehiclesPage />} /> */}
             {/* <Route path="/repairs" element={<RepairsPage />} /> */}
           </Route>
+        </Route>
 
         </Route>
 

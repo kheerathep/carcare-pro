@@ -1,27 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CarFront, Menu, User, Mail, EyeOff, Eye, ArrowRight } from 'lucide-react';
+import { CarFront, Menu, User, Mail, EyeOff, Eye, ArrowRight, Sun, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
+import { useAppStore } from '../store/useAppStore';
 
 export default function Register() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [strength, setStrength] = useState(0);
   
   // State สำหรับเก็บข้อมูลฟอร์ม
+  const { theme, toggleTheme } = useAppStore();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
+    acceptTerms: false,
   });
 
   // ฟังก์ชันอัปเดตข้อมูลในฟอร์ม
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.id]: e.target.value });
+    const { id, value, type, checked } = e.target;
+    setFormData({ ...formData, [id]: type === 'checkbox' ? checked : value });
   };
+
+  // คำนวณความปลอดภัยของรหัสผ่านแบบ Real-time
+  useEffect(() => {
+    const p = formData.password;
+    let s = 0;
+    if (!p) { setStrength(0); return; }
+    
+    if (p.length >= 8) s++;     // ความยาว 8+
+    if (/[A-Z]/.test(p)) s++;   // มีตัวพิมพ์ใหญ่
+    if (/[a-z]/.test(p)) s++;   // มีตัวพิมพ์เล็ก
+    if (/[0-9]/.test(p)) s++;   // มีตัวเลข
+    setStrength(s);
+  }, [formData.password]);
 
   // 1. ฟังก์ชันสมัครด้วย Google
   const handleGoogleSignUp = async () => {
@@ -44,8 +62,13 @@ export default function Register() {
       toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
       return;
     }
-    if (formData.password.length < 8) {
-      toast.error('รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร');
+    if (!formData.acceptTerms) {
+      toast.error('กรุณายอมรับเงื่อนไขการใช้งาน');
+      return;
+    }
+    // ตรวจสอบความปลอดภัยของรหัสผ่าน (ตัวพิมพ์ใหญ่, ตัวพิมพ์เล็ก, ตัวเลข, 8 ตัวอักษรขึ้นไป)
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(formData.password)) {
+      toast.error('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วยตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก และตัวเลข');
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -114,6 +137,13 @@ export default function Register() {
             เข้าสู่ระบบ
           </Link>
         </div>
+
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors ml-auto md:ml-4 mr-2 md:mr-0"
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
 
         {/* Mobile Menu Icon */}
         <button className="md:hidden text-slate-900 dark:text-white">
@@ -216,7 +246,28 @@ export default function Register() {
                     {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 pl-1">รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร</p>
+                
+                {/* Password Strength Meter */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex gap-1 h-1.5">
+                    {[...Array(4)].map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-full flex-1 rounded-full transition-colors duration-300 ${
+                          strength > i
+                            ? strength <= 2 ? 'bg-red-500' : strength === 3 ? 'bg-amber-500' : 'bg-emerald-500'
+                            : 'bg-slate-200 dark:bg-slate-700'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-xs px-1">
+                    <span className={strength <= 2 ? 'text-red-500' : strength === 3 ? 'text-amber-500' : 'text-emerald-500'}>
+                      {formData.password ? (strength <= 2 ? 'ไม่ปลอดภัย' : strength === 3 ? 'พอใช้' : 'ปลอดภัยมาก') : ''}
+                    </span>
+                    <span className="text-slate-400 dark:text-slate-500">8+ ตัวอักษร, A-Z, a-z, 0-9</span>
+                  </div>
+                </div>
               </div>
 
               {/* Confirm Password Input */}
@@ -239,6 +290,22 @@ export default function Register() {
                     {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                   </button>
                 </div>
+              </div>
+
+              {/* Terms and Conditions Checkbox */}
+              <div className="flex items-start gap-3 pt-2">
+                <div className="flex items-center h-5">
+                  <input
+                    id="acceptTerms"
+                    type="checkbox"
+                    checked={formData.acceptTerms}
+                    onChange={handleChange}
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500 bg-slate-50 dark:bg-[#111a22]"
+                  />
+                </div>
+                <label htmlFor="acceptTerms" className="text-sm text-slate-600 dark:text-slate-400">
+                  ฉันยอมรับ <a href="#" className="text-primary-600 dark:text-primary-500 hover:underline font-medium">เงื่อนไขการใช้งาน</a> และ <a href="#" className="text-primary-600 dark:text-primary-500 hover:underline font-medium">นโยบายความเป็นส่วนตัว</a>
+                </label>
               </div>
 
               {/* Submit Button */}

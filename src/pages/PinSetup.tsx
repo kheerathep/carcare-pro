@@ -1,16 +1,22 @@
-import { useState } from 'react';
-import { CarFront, Menu, Lock, ShieldCheck, Delete, ArrowRight, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CarFront, Menu, Lock, ShieldCheck, Delete, ArrowRight, ArrowLeft, RotateCcw, Sun, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import { hashPin, isValidPin, saveProfilePinHash, setStoredPinHash } from '../utils/pin';
+import { useAppStore } from '../store/useAppStore';
+import { hashPin, isValidPin, saveProfilePinHash, setStoredPinHash, getProfilePinHash } from '../utils/pin';
 import { usePinKeypad } from '../hooks/usePinKeypad';
 
 export default function PinSetup() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useAppStore();
   const session = useAuthStore((state) => state.session);
   const setPinVerified = useAuthStore((state) => state.setPinVerified);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [mode, setMode] = useState<'setup' | 'verify'>('setup');
+  const [isLoadingCheck, setIsLoadingCheck] = useState(true);
+  const [dbPinHash, setDbPinHash] = useState<string | null>(null);
 
   // ควบคุมขั้นตอน: 1 = ตั้งรหัส, 2 = ยืนยันรหัส
   const [step, setStep] = useState<1 | 2>(1);
@@ -18,13 +24,35 @@ export default function PinSetup() {
   // เก็บค่า PIN จากขั้นตอนที่ 1 เพื่อเอามาเทียบในขั้นตอนที่ 2
   const [firstPin, setFirstPin] = useState<string>('');
 
+  useEffect(() => {
+    async function checkExistingPin() {
+      if (!session?.user?.id) return;
+      try {
+        const hash = await getProfilePinHash(session.user.id);
+        if (hash) {
+          setDbPinHash(hash);
+          setMode('verify');
+        }
+      } catch (error) {
+        console.error('Error checking PIN:', error);
+      } finally {
+        setIsLoadingCheck(false);
+      }
+    }
+    checkExistingPin();
+  }, [session?.user?.id]);
+
   const { pin, setPin, handleNumberClick, handleBackspace } = usePinKeypad({
-    isDisabled: isSubmitting,
+    isDisabled: isSubmitting || isLoadingCheck,
     onEnter: () => {
-      if (step === 1) {
-        handleNextStep();
+      if (mode === 'verify') {
+        void handleVerify();
       } else {
-        void handleSubmit();
+        if (step === 1) {
+          handleNextStep();
+        } else {
+          void handleSubmit();
+        }
       }
     }
   });
@@ -41,6 +69,36 @@ export default function PinSetup() {
   function handleBackStep() {
     setStep(1);
     setPin(firstPin); // เอารหัสที่เคยพิมพ์ไว้กลับมาโชว์
+  }
+
+  // สำหรับโหมด Verify (ผู้ใช้เก่า)
+  async function handleVerify() {
+    if (!isValidPin(pin)) return;
+    
+    if (!dbPinHash || !session?.user?.id) {
+      toast.error('ไม่พบข้อมูล PIN กรุณาตั้งค่าใหม่');
+      setMode('setup');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const inputHash = await hashPin(pin);
+      
+      if (inputHash === dbPinHash) {
+        setStoredPinHash(session.user.id, inputHash);
+        setPinVerified(true);
+        toast.success('ยินดีต้อนรับกลับ');
+        navigate('/dashboard', { replace: true });
+      } else {
+        toast.error('รหัส PIN ไม่ถูกต้อง');
+        setPin('');
+      }
+    } catch (error) {
+      toast.error('เกิดข้อผิดพลาดในการตรวจสอบ');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   // เมื่อกดปุ่ม "ยืนยัน" (ขั้นตอนสุดท้าย)
@@ -77,6 +135,13 @@ export default function PinSetup() {
     }
   }
 
+  function handleResetRequest() {
+    setMode('setup');
+    setStep(1);
+    setPin('');
+    setFirstPin('');
+  }
+
   return (
     <div className="bg-slate-50 dark:bg-[#101922] font-sans min-h-screen flex flex-col overflow-x-hidden text-slate-900 dark:text-slate-100 antialiased selection:bg-primary-500/30 selection:text-primary-600 transition-colors duration-200">
       
@@ -91,6 +156,13 @@ export default function PinSetup() {
               <h2 className="text-slate-900 dark:text-white text-lg font-bold tracking-tight">CarCare Pro</h2>
             </div>
             
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors ml-auto mr-4"
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+
             <div className="flex items-center gap-4">
               <button className="hidden md:flex items-center justify-center h-9 px-4 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-all shadow-sm shadow-primary-500/20">
                 เข้าสู่ระบบ
@@ -115,17 +187,21 @@ export default function PinSetup() {
         <div className="w-full max-w-md space-y-8 bg-white dark:bg-[#1c2a38] p-8 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-10 relative overflow-hidden">
           
           {/* Header Section เปลี่ยนตาม Step */}
-          <div className="text-center space-y-4 transition-all duration-300">
+          {isLoadingCheck ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+            </div>
+          ) : (
+            <>
+            <div className="text-center space-y-4 transition-all duration-300">
             <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary-500/10 mb-6 text-primary-600">
-              {step === 1 ? <Lock size={32} /> : <ShieldCheck size={32} />}
+              {mode === 'verify' ? <Lock size={32} /> : (step === 1 ? <Lock size={32} /> : <ShieldCheck size={32} />)}
             </div>
             <h1 className="text-2xl md:text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">
-              {step === 1 ? 'ตั้งรหัส PIN 6 หลัก' : 'ยืนยันรหัส PIN อีกครั้ง'}
+              {mode === 'verify' ? 'กรุณากรอกรหัส PIN' : (step === 1 ? 'ตั้งรหัส PIN 6 หลัก' : 'ยืนยันรหัส PIN อีกครั้ง')}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base font-normal leading-relaxed">
-              {step === 1 
-                ? 'ใช้สำหรับเข้าใช้งานแอปในครั้งถัดไป' 
-                : 'กรุณากรอกรหัส PIN 6 หลักเดิมอีกครั้งเพื่อให้แน่ใจว่าถูกต้อง'}
+              {mode === 'verify' ? 'เพื่อยืนยันตัวตนเข้าใช้งาน' : (step === 1 ? 'ใช้สำหรับเข้าใช้งานแอปในครั้งถัดไป' : 'กรุณากรอกรหัส PIN 6 หลักเดิมอีกครั้งเพื่อให้แน่ใจว่าถูกต้อง')}
             </p>
           </div>
 
@@ -178,7 +254,26 @@ export default function PinSetup() {
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-3 pt-2">
-            {step === 1 ? (
+            {mode === 'verify' ? (
+              <>
+                <button 
+                  onClick={handleVerify}
+                  disabled={pin.length !== 6 || isSubmitting}
+                  className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg h-12 px-5 bg-primary-600 hover:bg-primary-700 text-white text-base font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ShieldCheck size={20} />
+                  <span>{isSubmitting ? 'กำลังตรวจสอบ...' : 'เข้าใช้งาน'}</span>
+                </button>
+                <button 
+                  onClick={handleResetRequest}
+                  disabled={isSubmitting}
+                  className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg h-12 px-5 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-base font-bold transition-colors"
+                >
+                  <RotateCcw size={20} />
+                  <span>ลืมรหัส PIN / ตั้งค่าใหม่</span>
+                </button>
+              </>
+            ) : step === 1 ? (
               <button 
                 onClick={handleNextStep}
                 disabled={pin.length !== 6 || isSubmitting}
@@ -208,6 +303,8 @@ export default function PinSetup() {
               </>
             )}
           </div>
+          </>
+          )}
 
         </div>
       </main>

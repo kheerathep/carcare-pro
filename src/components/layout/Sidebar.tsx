@@ -1,0 +1,65 @@
+import { CarFront, LayoutDashboard, History, BarChart3, Lock, LogOut } from 'lucide-react';
+import { useAppStore } from '../../store/useAppStore';
+import { useAuthStore } from '../../store/useAuthStore';
+
+export default function Sidebar() {
+  const { isSidebarOpen } = useAppStore();
+  const { signOut } = useAuthStore();
+
+  return (
+    <aside className={`w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 flex-col h-screen sticky top-0 transition-transform duration-300 z-40 ${isSidebarOpen ? 'fixed inset-y-0 left-0 flex' : 'hidden md:flex'}`}>
+      
+      {/* โลโก้แอป */}
+      <div className="p-6 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+          <CarFront size={24} />
+        </div>
+        <div>
+          <h1 className="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight">CarCare Pro</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-xs font-normal">ดูแลรถครบวงจร</p>
+        </div>
+      </div>
+
+      {/* เมนูนำทาง */}
+      <nav className="flex-1 px-4 py-4 flex flex-col gap-1.5 overflow-y-auto">
+        <a className="flex items-center gap-3 px-3 py-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border border-primary-100 dark:border-primary-500/20 transition-all shadow-sm" href="#">
+          <LayoutDashboard size={20} />
+          <span className="text-sm font-semibold">แดชบอร์ด</span>
+        </a>
+        <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
+          <CarFront size={20} className="group-hover:text-primary-500 transition-colors" />
+          <span className="text-sm font-medium">รถของฉัน</span>
+        </a>
+        <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
+          <History size={20} className="group-hover:text-primary-500 transition-colors" />
+          <span className="text-sm font-medium">ประวัติการซ่อม</span>
+        </a>
+        <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
+          <BarChart3 size={20} className="group-hover:text-primary-500 transition-colors" />
+          <span className="text-sm font-medium">การวิเคราะห์</span>
+        </a>
+        <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
+          <Lock size={20} className="group-hover:text-primary-500 transition-colors" />
+          <span className="text-sm font-medium">ตั้งค่า PIN</span>
+        </a>
+      </nav>
+
+      {/* โปรไฟล์ด้านล่าง */}
+      <div className="p-4 border-t border-slate-200 dark:border-slate-700 mt-auto bg-white dark:bg-slate-800">
+        <div className="flex items-center gap-3 px-3 py-3 mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-primary-500 flex items-center justify-center text-xs font-bold text-white">
+            SC
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">สมชาย ใจดี</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">Basic Plan</p>
+          </div>
+        </div>
+        <button onClick={signOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-600 dark:text-red-400/80 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400 transition-colors">
+          <LogOut size={20} />
+          <span className="text-sm font-medium">ออกจากระบบ</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
