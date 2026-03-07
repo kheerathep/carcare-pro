@@ -111,3 +111,9 @@ export interface Database {
     }
   }
 }
+
+// 🔥 เพิ่มส่วนนี้ไว้ล่างสุด เพื่อให้ดึง Type ไปใช้ใน Component ได้ง่ายๆ
+// วาง 3 บรรทัดนี้ไว้ล่างสุดของไฟล์ src/types/database.ts
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+export type Repair = Database['public']['Tables']['repairs']['Row'];

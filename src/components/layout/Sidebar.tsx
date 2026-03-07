@@ -5,6 +5,9 @@ import { useAuthStore } from '../../store/useAuthStore';
 export default function Sidebar() {
   const { isSidebarOpen } = useAppStore();
   const { signOut } = useAuthStore();
+  const session = useAuthStore((state) => state.session);
+  const userEmail = session?.user?.email || 'ผู้ใช้งาน';
+  const displayName = userEmail.split('@')[0];
 
   return (
     <aside className={`w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 flex-col h-screen sticky top-0 transition-transform duration-300 z-40 ${isSidebarOpen ? 'fixed inset-y-0 left-0 flex' : 'hidden md:flex'}`}>
@@ -47,12 +50,12 @@ export default function Sidebar() {
       {/* โปรไฟล์ด้านล่าง */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-700 mt-auto bg-white dark:bg-slate-800">
         <div className="flex items-center gap-3 px-3 py-3 mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-primary-500 flex items-center justify-center text-xs font-bold text-white">
-            SC
+          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-primary-500 flex items-center justify-center text-xs font-bold text-white uppercase">
+            {displayName.substring(0, 2)} {/* ตัวย่อ 2 ตัวแรก */}
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">สมชาย ใจดี</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">Basic Plan</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{displayName}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{userEmail}</p>
           </div>
         </div>
         <button onClick={signOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-600 dark:text-red-400/80 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400 transition-colors">

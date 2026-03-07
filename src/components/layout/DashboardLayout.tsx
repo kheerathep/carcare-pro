@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../layout/Sidebar';
 import Header from '../layout/Header';
+import { useAuthStore } from "../../store/useAuthStore";
 export default function DashboardLayout() {
   return (
     <div className="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50 font-sans min-h-screen flex overflow-hidden transition-colors duration-300">

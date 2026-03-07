@@ -7,6 +7,7 @@ import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
 import { useAppStore } from '../store/useAppStore';
 
 
+
 export default function Login() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useAppStore();

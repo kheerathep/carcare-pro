@@ -1,8 +1,13 @@
 import { Menu, Bell, Sun, Moon } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export default function Header() {
   const { theme, toggleTheme, toggleSidebar } = useAppStore();
+  const session = useAuthStore((state) => state.session); // 🔥 2. ดึง session มาใช้
+  // 🔥 3. ดึงอีเมลมาโชว์ (ตัดเอาแค่ชื่อหน้า @ ถ้าไม่มีชื่อจริง)
+  const userEmail = session?.user?.email || 'ผู้ใช้งาน';
+  const displayName = userEmail.split('@')[0];
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
@@ -30,13 +35,16 @@ export default function Header() {
         
         <div className="flex items-center gap-3 pl-2 sm:pl-4 border-l border-slate-200 dark:border-slate-700">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium text-slate-900 dark:text-white">สมชาย ใจดี</p>
+            {/* 🔥 4. เปลี่ยนชื่อตรงนี้ */}
+            <p className="text-sm font-medium text-slate-900 dark:text-white">{displayName}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">เจ้าของรถทั่วไป</p>
           </div>
           <div 
-            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-slate-200 dark:bg-slate-700 bg-cover bg-center ring-2 ring-slate-200 dark:ring-slate-700" 
-            style={{ backgroundImage: "url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&auto=format&fit=crop')" }}
-          ></div>
+            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-slate-200 dark:bg-slate-700 bg-cover bg-center ring-2 ring-slate-200 dark:ring-slate-700 flex items-center justify-center text-slate-500 font-bold uppercase" 
+            /* 🔥 5. (ทางเลือก) เปลี่ยนรูปโปรไฟล์เป็นตัวอักษรย่อถ้าไม่มีรูป */
+          >
+            {displayName.charAt(0)}
+          </div>
         </div>
       </div>
     </header>
