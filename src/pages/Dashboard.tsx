@@ -134,7 +134,7 @@ export default function Dashboard() {
                       <td className="px-6 py-4 font-medium text-slate-900 dark:text-white flex items-center gap-3">
                         <div
                           className="h-9 w-9 rounded-lg bg-slate-200 dark:bg-slate-700 bg-cover bg-center ring-1 ring-slate-200 dark:ring-slate-600"
-                          style={{ backgroundImage: `url('${repair.cars?.image_url || 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fd?q=80&w=150&auto=format&fit=crop'}')` }}
+                          
                         ></div>
                         <div className="flex flex-col">
                           <span>{repair.cars?.brand} {repair.cars?.model}</span>

@@ -1,4 +1,5 @@
 import { CarFront, LayoutDashboard, History, BarChart3, Lock, LogOut } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -8,6 +9,10 @@ export default function Sidebar() {
   const session = useAuthStore((state) => state.session);
   const userEmail = session?.user?.email || 'ผู้ใช้งาน';
   const displayName = userEmail.split('@')[0];
+  const navItemClass = ({ isActive }: { isActive: boolean }) =>
+    isActive
+      ? 'flex items-center gap-3 px-3 py-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border border-primary-100 dark:border-primary-500/20 transition-all shadow-sm'
+      : 'flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group';
 
   return (
     <aside className={`w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 flex-col h-screen sticky top-0 transition-transform duration-300 z-40 ${isSidebarOpen ? 'fixed inset-y-0 left-0 flex' : 'hidden md:flex'}`}>
@@ -25,14 +30,18 @@ export default function Sidebar() {
 
       {/* เมนูนำทาง */}
       <nav className="flex-1 px-4 py-4 flex flex-col gap-1.5 overflow-y-auto">
-        <a className="flex items-center gap-3 px-3 py-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border border-primary-100 dark:border-primary-500/20 transition-all shadow-sm" href="#">
+        <NavLink className={navItemClass} to="/dashboard">
           <LayoutDashboard size={20} />
           <span className="text-sm font-semibold">แดชบอร์ด</span>
-        </a>
-        <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
-          <CarFront size={20} className="group-hover:text-primary-500 transition-colors" />
-          <span className="text-sm font-medium">รถของฉัน</span>
-        </a>
+        </NavLink>
+        <NavLink className={navItemClass} to="/my-cars">
+          {({ isActive }) => (
+            <>
+              <CarFront size={20} className={isActive ? '' : 'group-hover:text-primary-500 transition-colors'} />
+              <span className={`text-sm ${isActive ? 'font-semibold' : 'font-medium'}`}>รถของฉัน</span>
+            </>
+          )}
+        </NavLink>
         <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
           <History size={20} className="group-hover:text-primary-500 transition-colors" />
           <span className="text-sm font-medium">ประวัติการซ่อม</span>
