@@ -1,69 +1,68 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-//Import Pages
+
+// Import Pages
 import Login from "../pages/login";
 import LoginPin from "../pages/loginPin";
 import Register from "../pages/Register";
 import PinSetup from "../pages/PinSetup";
+import ForgotPin from "../pages/ForgotPin";
 import Dashboard from '../pages/Dashboard';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import ForgotPassword from '../pages/ForgotPassword';
 import ResetPassword from '../pages/ResetPassword';
 
-// ----------------------------------------------------
-// 1. Components สำหรับ "ยามเฝ้าประตู" (Guards)
-// ----------------------------------------------------
 const LoadingScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101922] text-primary">กำลังโหลด...</div>
+  <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101922] text-primary-600 font-medium">กำลังตรวจสอบข้อมูล...</div>
 );
 
-const PinSetupGuard = () => {
-  const { isPinVerified } = useAuthStore();
+// ----------------------------------------------------
+// ยามเฝ้าประตู (Guards)
+// ----------------------------------------------------
 
-  if (isPinVerified) {
-    return <Navigate to="/" replace />;
+// 1. Guard สำหรับคนแปลกหน้า (หน้า Login/Register)
+const GuestGuard = () => {
+  const { session, isLoading, isPinVerified } = useAuthStore();
+  if (isLoading) return <LoadingScreen />;
+
+  if (session) {
+    if (isPinVerified) return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/login-pin" replace />;
   }
-
-  return <Outlet />;
+  return <Outlet />; 
 };
 
-// Guard A: สำหรับสมาชิกที่ล็อกอินแล้ว (Require Auth)
-// ใช้สำหรับหน้าตั้งค่า PIN หรือหน้าที่ไม่ต้องใช้ PIN
+// 2. Guard สำหรับคนที่ "ล็อกอินแล้ว" 
 const AuthGuard = () => {
   const { session, isLoading } = useAuthStore();
   const location = useLocation();
 
   if (isLoading) return <LoadingScreen />;
-
-  if (!session) {
-    // ถ้ายังไม่ล็อกอิน ส่งไปหน้า Login พร้อมแนบที่อยู่ที่อยากไป (state)
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+  if (!session) return <Navigate to="/login" state={{ from: location }} replace />;
 
   return <Outlet />;
 };
 
-// Guard C: สำหรับพื้นที่หวงห้าม (Require PIN)
-// ต้องล็อกอิน AND ยืนยัน PIN แล้วเท่านั้น ถึงจะเข้า Dashboard ได้
+// 3. Guard หวงห้าม (ต้องผ่าน PIN เท่านั้น ถึงจะเข้า Dashboard ได้)
 const PinGuard = () => {
   const { isPinVerified } = useAuthStore();
-
+  
   if (!isPinVerified) {
-    return <Navigate to="/pin-setup" replace />;
+    // ถ้ายังไม่ได้ยืนยัน PIN ให้เด้งไปหน้า PIN
+    return <Navigate to="/login-pin" replace />;
   }
 
   return <Outlet />;
 };
 
 // ----------------------------------------------------
-// 2. Main Router Configuration
+// Main Router
 // ----------------------------------------------------
 
 export default function AppRouter() {
   const { initializeAuth } = useAuthStore();
 
-  // เริ่มต้นระบบ: เช็ค Session ทันทีที่ App รัน
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
@@ -71,34 +70,33 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/login-pin" element={<LoginPin />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
         
-        {/* กลุ่มที่ 1: Protected (ต้องล็อกอินก่อน) */}
+        {/* กลุ่มที่ 1: เข้าได้ตอนยังไม่ล็อกอิน */}
+        <Route element={<GuestGuard />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+        </Route>
+        
+        {/* กลุ่มที่ 2: ต้องมีเซสชัน (Login แล้ว) ถึงเข้าได้ */}
         <Route element={<AuthGuard />}>
-          {/* 2.1 หน้าจัดการ PIN (เข้าได้เฉพาะคนที่ยังไม่ยืนยัน PIN) */}
-          <Route element={<PinSetupGuard />}>
-            <Route path="/pin-setup" element={<PinSetup />} />
+          
+          {/* หน้าจัดการ PIN (เป็นทั้งหน้าตั้งค่า และหน้าปลดล็อก) */}
+          <Route path="/login-pin" element={<LoginPin />} />
+          <Route path="/pin-setup" element={<PinSetup />} />
+          <Route path="/forgot-pin" element={<ForgotPin />} />
+
+          {/* กลุ่มที่ 3: ด่านสุดท้าย เข้า Dashboard (ต้องผ่านการกรอก PIN ก่อน) */}
+          <Route element={<PinGuard />}>
+            <Route element={<DashboardLayout />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Route>
           </Route>
 
-          {/* 2.2 หน้า Dashboard & อื่นๆ (ต้องผ่าน PIN Guard อีกชั้น) */}
-        <Route element={<PinGuard />}>
-          {/* หุ้มหน้าเว็บทั้งหมดด้วย DashboardLayout */}
-          <Route element={<DashboardLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            {/* ในอนาคตคุณสามารถเพิ่มหน้าอื่นๆ ตรงนี้ได้เลย แล้วมันจะมี Sidebar/Header ให้อัตโนมัติ! */}
-            {/* <Route path="/vehicles" element={<VehiclesPage />} /> */}
-            {/* <Route path="/repairs" element={<RepairsPage />} /> */}
-          </Route>
         </Route>
 
-        </Route>
-
-        {/* กรณีพิมพ์ URL มั่วๆ ให้เด้งไปหน้า Login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
         
       </Routes>

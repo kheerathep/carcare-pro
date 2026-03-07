@@ -124,12 +124,7 @@ export default function Register() {
           <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-[-0.015em]">CarCare Pro</h2>
         </div>
         
-        <div className="hidden md:flex flex-1 justify-end gap-8">
-          <div className="flex items-center gap-9">
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 text-sm font-medium transition-colors" href="#">หน้าแรก</a>
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 text-sm font-medium transition-colors" href="#">เกี่ยวกับเรา</a>
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 text-sm font-medium transition-colors" href="#">ติดต่อเรา</a>
-          </div>
+        <div className="hidden md:flex flex-1 justify-end gap-8 items-center">
           <Link
             to="/login"
             className="flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-6 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold transition-colors shadow-sm"

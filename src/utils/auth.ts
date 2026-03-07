@@ -38,19 +38,22 @@ export function mapAuthErrorMessage(message: string, isSignUp = false): string {
  * This will now always prompt the user to select an account.
  * @param isSignUp A boolean to indicate if the context is sign-up.
  */
-export async function handleGoogleAuth(isSignUp: boolean) {
-  const { error } = await supabase.auth.signInWithOAuth({
+export const handleGoogleAuth = async (isSignUp: boolean = false) => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${window.location.origin}/pin-setup`,
+      // 1. ชี้ไปหน้า Dashboard เหมือนเดิม
+      redirectTo: `${window.location.origin}/dashboard`, 
+      
+      // 🔥 2. เพิ่ม queryParams ตรงนี้! เพื่อบังคับให้ Google โชว์หน้าเลือก Gmail เสมอ
       queryParams: {
-        prompt: 'select_account', // เพิ่มส่วนนี้เพื่อให้ผู้ใช้เลือกบัญชีทุกครั้ง
+        prompt: 'select_account', 
       },
     },
   });
 
   if (error) {
-    toast.error(mapAuthErrorMessage(error.message, isSignUp));
     throw error;
   }
-}
+  return data;
+};

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CarFront, Mail, Send, ArrowLeft, CheckCircle, RefreshCw, Sun, Moon, HelpCircle, Lock } from 'lucide-react';
+import { CarFront, Mail, Send, ArrowLeft, CheckCircle, RefreshCw, Sun, Moon, HelpCircle, Lock } from 'lucide-react'
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/useAppStore';
 
-export default function ForgotPassword() {
+export default function ForgotPin() {
   const { theme, toggleTheme } = useAppStore();
   
   const [step, setStep] = useState<1 | 2>(1);
@@ -14,15 +14,15 @@ export default function ForgotPassword() {
   const [countdown, setCountdown] = useState(60);
 
   // ระบบนับเวลาถอยหลังเมื่อส่งอีเมลแล้ว
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
+ useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>; // 👈 แก้เป็นคำนี้ครับ
     if (step === 2 && countdown > 0) {
       timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
     }
     return () => clearTimeout(timer);
   }, [step, countdown]);
 
-  // ฟังก์ชันส่งอีเมลขอรีเซ็ตรหัสผ่าน
+  // ฟังก์ชันส่งอีเมลขอรีเซ็ต
   const handleSendResetLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
@@ -33,16 +33,16 @@ export default function ForgotPassword() {
     try {
       setIsLoading(true);
       
-      // ส่งคำสั่งไปยัง Supabase โดยให้ลิงก์เด้งกลับมาที่หน้าตั้งรหัสผ่านใหม่ (Reset Password)
+      // ส่งคำสั่ง Reset Password ไปยัง Supabase (เพื่อใช้ยืนยันตัวตนก่อนตั้ง PIN ใหม่)
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/pin-setup`,
       });
 
       if (error) throw error;
 
       setStep(2);
-      setCountdown(60); 
-      toast.success('ส่งลิงก์รีเซ็ตรหัสผ่านสำเร็จ!');
+      setCountdown(60); // เริ่มนับเวลาถอยหลัง 60 วินาทีใหม่
+      toast.success('ส่งลิงก์รีเซ็ตสำเร็จ!');
     } catch (error: any) {
       toast.error(error.message || 'เกิดข้อผิดพลาดในการส่งอีเมล');
     } finally {
@@ -65,7 +65,7 @@ export default function ForgotPassword() {
         <div className="absolute -bottom-[10%] left-[20%] w-[30%] h-[30%] bg-primary-500/10 dark:bg-primary-500/5 rounded-full blur-[100px]"></div>
       </div>
 
-      {/* Theme Toggle Button */}
+      {/* Theme Toggle Button (Top Right) */}
       <div className="absolute top-6 right-6 z-50">
         <button
           onClick={toggleTheme}
@@ -100,10 +100,9 @@ export default function ForgotPassword() {
                   <div className="absolute inset-0 bg-primary-500/10 rounded-full animate-pulse"></div>
                   <Lock size={36} className="text-primary-600 dark:text-primary-500" />
                 </div>
-                {/* เปลี่ยนข้อความเป็นลืมรหัสผ่าน */}
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white text-center">ลืมรหัสผ่าน</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white text-center">ลืมรหัส PIN</h2>
                 <p className="text-slate-500 dark:text-slate-400 text-sm text-center mt-2 max-w-xs leading-relaxed">
-                  กรุณากรอกอีเมลที่ลงทะเบียนไว้ เราจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ให้คุณ
+                  กรุณากรอกอีเมลที่ลงทะเบียนไว้ เราจะส่งลิงก์สำหรับตั้งรหัส PIN ใหม่ให้คุณ
                 </p>
               </div>
 
@@ -155,9 +154,9 @@ export default function ForgotPassword() {
               </div>
 
               <div className="text-center">
-                <Link to="/login" className="inline-flex items-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors duration-200 group">
+                <Link to="/login-pin" className="inline-flex items-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors duration-200 group">
                   <ArrowLeft size={16} className="mr-1 transform group-hover:-translate-x-1 transition-transform" />
-                  กลับไปหน้าเข้าสู่ระบบ
+                  กลับไปหน้าเข้าสู่ระบบ PIN
                 </Link>
               </div>
             </div>
@@ -176,14 +175,14 @@ export default function ForgotPassword() {
 
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">ส่งอีเมลเรียบร้อยแล้ว</h2>
               <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-8">
-                เราได้ส่งลิงก์สำหรับรีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว<br />
+                เราได้ส่งลิงก์สำหรับรีเซ็ตรหัส PIN ไปยังอีเมลของคุณแล้ว<br />
                 <span className="text-slate-900 dark:text-white font-medium">{email}</span><br />
                 กรุณาตรวจสอบในกล่องจดหมายของคุณ
               </p>
 
               <div className="w-full space-y-4">
                 <Link to="/login" className="flex items-center justify-center w-full py-3.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary-500/25 transform hover:-translate-y-0.5">
-                  ไปที่หน้าเข้าสู่ระบบ
+                  ไปที่หน้าเข้าสู่ระบบปกติ
                 </Link>
 
                 <div className="flex items-center gap-4 py-2">

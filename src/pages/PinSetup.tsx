@@ -136,10 +136,8 @@ export default function PinSetup() {
   }
 
   function handleResetRequest() {
-    setMode('setup');
-    setStep(1);
-    setPin('');
-    setFirstPin('');
+    // 🔥 สั่งให้วิ่งไปหน้า ForgotPin ที่เราสร้างไว้ครับ
+    navigate('/forgot-pin');
   }
 
   return (

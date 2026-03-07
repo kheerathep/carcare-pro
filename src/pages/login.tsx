@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Menu, CarFront, EyeOff, Eye, Lock, Sun, Moon } from 'lucide-react';
+import { Menu, CarFront, EyeOff, Eye, Sun, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
 import { useAppStore } from '../store/useAppStore';
+
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,19 +15,20 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+
   // ฟังก์ชันสำหรับ Login ด้วย Google
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true);
       await handleGoogleAuth(false);
-    } catch (error) {
+    } catch {
       // error is already handled by toast in handleGoogleAuth
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+ const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!email || !password) {
@@ -45,9 +47,12 @@ export default function Login() {
       if (error) throw error;
 
       toast.success('เข้าสู่ระบบสำเร็จ');
-      navigate('/pin-setup', { replace: true });
-    } catch (error: any) {
-      toast.error(mapAuthErrorMessage(error.message));
+      
+      navigate('/login-pin', { replace: true }); 
+      
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(mapAuthErrorMessage(message));
     } finally {
       setIsLoading(false);
     }
@@ -66,12 +71,6 @@ export default function Login() {
         </div>
         
         <div className="hidden md:flex flex-1 justify-end gap-8">
-          <div className="flex items-center gap-9">
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors text-sm font-medium leading-normal" href="#">หน้าแรก</a>
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors text-sm font-medium leading-normal" href="#">บริการ</a>
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors text-sm font-medium leading-normal" href="#">เกี่ยวกับเรา</a>
-            <a className="text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors text-sm font-medium leading-normal" href="#">ติดต่อเรา</a>
-          </div>
           <Link
             to="/register"
             className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary-600 hover:bg-primary-700 transition-colors text-white text-sm font-bold leading-normal tracking-[0.015em]"
@@ -80,14 +79,16 @@ export default function Login() {
           </Link>
         </div>
         
-        <button
+        <button 
           onClick={toggleTheme}
-          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors ml-auto md:ml-4 mr-2 md:mr-0"
+          className="p-2 ml-4 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          title="สลับโหมดหน้าจอ"
         >
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <div className="md:hidden text-slate-900 dark:text-white">
+        {/* เมนูมือถือ */}
+        <div className="md:hidden text-slate-900 dark:text-white ml-2">
           <Menu size={24} />
         </div>
       </header>
@@ -165,13 +166,8 @@ export default function Login() {
                 <span>{isLoading ? 'กำลังเชื่อมต่อ...' : 'เข้าสู่ระบบด้วย Google'}</span>
               </button>
 
-              {/* PIN Login Link (เตรียมไว้สำหรับอนาคต) */}
-              <div className="flex justify-center mt-2">
-                <Link to="/login-pin" className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 dark:text-primary-500 dark:hover:text-primary-400 transition-colors text-sm font-medium">
-                  <Lock size={16} />
-                  เข้าใช้งานด้วยรหัส PIN
-                </Link>
-              </div>
+            
+            
             </form>
           </div>
 

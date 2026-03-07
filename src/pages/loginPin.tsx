@@ -9,10 +9,11 @@ import { usePinKeypad } from '../hooks/usePinKeypad';
 
 export default function LoginPin() {
   const navigate = useNavigate();
-  const { theme, setTheme } = useAppStore();
+  const { theme, toggleTheme } = useAppStore();
   const session = useAuthStore((state) => state.session);
   const isPinVerified = useAuthStore((state) => state.isPinVerified);
   const setPinVerified = useAuthStore((state) => state.setPinVerified);
+  const signOut = useAuthStore((state) => state.signOut);
 
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -96,33 +97,39 @@ export default function LoginPin() {
     }
   }, [isPinVerified, navigate]);
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('ออกจากระบบเรียบร้อย');
+      navigate('/login', { replace: true });
+    } catch {
+      toast.error('เกิดข้อผิดพลาด');
+    }
+  };
+
   return (
     <div className="bg-slate-50 dark:bg-[#101922] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
-      <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 md:px-10 py-4 bg-slate-50 dark:bg-[#101922]">
+      <header className="relative z-[100] flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 md:px-10 py-4 bg-slate-50 dark:bg-[#101922]">
         <div className="flex items-center gap-3 text-primary-600">
           <CarFront size={28} />
-          <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">CarCare Pro</h2>
+          <h2 className="text-slate-900 dark:text-white text-xl font-bold tracking-tight">CarCare Pro</h2>
         </div>
 
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors ml-auto mr-4"
-        >
-          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-
-        <div className="flex gap-3">
-          <Link
-            to="/register"
-            className="flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-primary-600 text-white text-sm font-bold"
-          >
-            ลงทะเบียน
-          </Link>
+        <div className="flex items-center gap-4">
           <button
+            onClick={toggleTheme}
             type="button"
-            className="flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-bold"
+            className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
           >
-            ช่วยเหลือ
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+
+          <button
+            onClick={handleLogout}
+            type="button"
+            className="flex items-center justify-center h-10 px-5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold shadow-md transition-all active:scale-95"
+          >
+            ออกจากระบบ
           </button>
         </div>
       </header>
@@ -156,11 +163,10 @@ export default function LoginPin() {
               {[...Array(6)].map((_, index) => (
                 <div
                   key={index}
-                  className={`w-12 h-16 md:w-14 md:h-16 text-center text-2xl font-bold rounded-lg border-2 flex items-center justify-center transition-colors ${
-                    pin.length > index
-                      ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-600'
-                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-400'
-                  }`}
+                  className={`w-12 h-16 md:w-14 md:h-16 text-center text-2xl font-bold rounded-lg border-2 flex items-center justify-center transition-colors ${pin.length > index
+                    ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-600'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-400'
+                    }`}
                 >
                   {pin.length > index ? '•' : ''}
                 </div>
@@ -222,13 +228,12 @@ export default function LoginPin() {
           )}
 
           <div className="flex flex-col gap-3 items-center text-sm font-medium">
-            <button
-              type="button"
-              onClick={() => navigate('/pin-setup')}
+            <Link
+              to="/forgot-pin"
               className="text-primary-600 dark:text-primary-500 hover:underline"
             >
               ลืมรหัส PIN?
-            </button>
+            </Link>
             <Link
               className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors inline-flex items-center gap-2"
               to="/login"
