@@ -1,35 +1,73 @@
 import { useEffect, useState } from 'react';
-import { CarFront, Wrench, Banknote, Calendar, TrendingUp, History, MapPin, MoreHorizontal, Plus, PlusCircle } from 'lucide-react';
+import { CarFront, Wrench, Banknote, Calendar, TrendingUp, History, MapPin, MoreHorizontal, Plus, PlusCircle, Save, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { fetchDashboardData } from '../services/api';
 import type { Car, Repair, Appointment } from '../types/database';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
+
+type CarWithImage = Car & {
+  image_url?: string | null;
+};
+
+type AppointmentForm = {
+  car_id: string;
+  title: string;
+  appointment_date: string;
+  location: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+};
+
+function getTodayDate() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+const DEFAULT_CAR_IMAGE =
+  'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=1200';
 
 export default function Dashboard() {
   const session = useAuthStore((state) => state.session);
+  const navigate = useNavigate();
   const displayName = session?.user?.email?.split('@')[0] || 'ผู้ใช้งาน';
 
   const [cars, setCars] = useState<Car[]>([]);
   const [repairs, setRepairs] = useState<Repair[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+  const [isSavingAppointment, setIsSavingAppointment] = useState(false);
+  const [appointmentForm, setAppointmentForm] = useState<AppointmentForm>({
+    car_id: '',
+    title: '',
+    appointment_date: getTodayDate(),
+    location: '',
+    status: 'scheduled',
+  });
+
+  const loadDashboardData = async (userId: string) => {
+    try {
+      setIsLoading(true);
+      const data = await fetchDashboardData(userId);
+      setCars(data?.cars || []);
+      setRepairs(data?.repairs || []);
+      setAppointments(data?.appointments || []);
+      setAppointmentForm((current) => ({
+        ...current,
+        car_id: current.car_id || data?.cars?.[0]?.id || '',
+      }));
+    } catch {
+      toast.error('ไม่สามารถดึงข้อมูลได้');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadData() {
-      if (!session?.user?.id) return;
-      try {
-        setIsLoading(true);
-        const data = await fetchDashboardData(session.user.id);
-        setCars(data?.cars || []);
-        setRepairs(data?.repairs || []);
-        setAppointments(data?.appointments || []);
-      } catch (error) {
-        toast.error('ไม่สามารถดึงข้อมูลได้');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
+    if (!session?.user?.id) return;
+    void loadDashboardData(session.user.id);
   }, [session?.user?.id]);
 
   const totalCost = repairs.reduce((sum, item) => sum + Number(item.cost || 0), 0);
@@ -47,6 +85,81 @@ export default function Dashboard() {
     return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(amount);
   };
 
+  const resetAppointmentForm = () => {
+    setAppointmentForm({
+      car_id: cars[0]?.id || '',
+      title: '',
+      appointment_date: getTodayDate(),
+      location: '',
+      status: 'scheduled',
+    });
+  };
+
+  const openAppointmentModal = () => {
+    if (!cars.length) {
+      toast.error('เพิ่มรถอย่างน้อย 1 คันก่อนสร้างนัดหมาย');
+      return;
+    }
+    resetAppointmentForm();
+    setIsAppointmentModalOpen(true);
+  };
+
+  const closeAppointmentModal = () => {
+    setIsAppointmentModalOpen(false);
+    resetAppointmentForm();
+  };
+
+  const handleOpenRepairForm = () => {
+    navigate('/repairs', {
+      state: {
+        openCreateModal: true,
+      },
+    });
+  };
+
+  const handleCreateAppointment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!session?.user?.id) return;
+    if (!appointmentForm.car_id) {
+      toast.error('กรุณาเลือกรถ');
+      return;
+    }
+    if (!appointmentForm.title.trim()) {
+      toast.error('กรุณาระบุหัวข้อนัดหมาย');
+      return;
+    }
+    if (!appointmentForm.appointment_date) {
+      toast.error('กรุณาระบุวันนัด');
+      return;
+    }
+
+    try {
+      setIsSavingAppointment(true);
+      const { error } = await supabase.from('appointments').insert([
+        {
+          user_id: session.user.id,
+          car_id: appointmentForm.car_id,
+          title: appointmentForm.title.trim(),
+          appointment_date: appointmentForm.appointment_date,
+          location: appointmentForm.location.trim() || null,
+          status: appointmentForm.status,
+        },
+      ]);
+
+      if (error) throw error;
+
+      await loadDashboardData(session.user.id);
+      toast.success('สร้างนัดหมายเรียบร้อยแล้ว');
+      closeAppointmentModal();
+    } catch (error) {
+      console.error('Failed to create appointment:', error);
+      const message = error instanceof Error ? error.message : 'สร้างนัดหมายไม่สำเร็จ';
+      toast.error(message);
+    } finally {
+      setIsSavingAppointment(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div></div>;
   }
@@ -58,7 +171,11 @@ export default function Dashboard() {
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white">ยินดีต้อนรับกลับ, คุณ {displayName} 👋</h3>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">นี่คือสรุปข้อมูลการดูแลรถยนต์ของคุณในวันนี้</p>
         </div>
-        <button className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-3 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 active:scale-95">
+        <button
+          type="button"
+          onClick={handleOpenRepairForm}
+          className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-3 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 active:scale-95"
+        >
           <PlusCircle size={20} /> เพิ่มรายการซ่อมด่วน
         </button>
       </div>
@@ -114,7 +231,13 @@ export default function Dashboard() {
             <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2.5 text-lg">
               <History size={20} className="text-blue-500 dark:text-blue-400" /> ประวัติการซ่อมล่าสุด
             </h3>
-            <button className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium">ดูทั้งหมด</button>
+            <button
+              type="button"
+              onClick={() => navigate('/repairs')}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium"
+            >
+              ดูทั้งหมด
+            </button>
           </div>
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left border-collapse">
@@ -129,16 +252,19 @@ export default function Dashboard() {
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-sm">
                 {recentRepairs.length > 0 ? (
-                  recentRepairs.map((repair) => (
+                  recentRepairs.map((repair) => {
+                    const repairCar = repair.cars as CarWithImage | undefined;
+
+                    return (
                     <tr key={repair.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                       <td className="px-6 py-4 font-medium text-slate-900 dark:text-white flex items-center gap-3">
                         <div
                           className="h-9 w-9 rounded-lg bg-slate-200 dark:bg-slate-700 bg-cover bg-center ring-1 ring-slate-200 dark:ring-slate-600"
-                          
+                          style={{ backgroundImage: `url('${repairCar?.image_url || DEFAULT_CAR_IMAGE}')` }}
                         ></div>
                         <div className="flex flex-col">
-                          <span>{repair.cars?.brand} {repair.cars?.model}</span>
-                          <span className="text-xs text-slate-500">{repair.cars?.plate_number}</span>
+                          <span>{repairCar?.brand} {repairCar?.model}</span>
+                          <span className="text-xs text-slate-500">{repairCar?.plate_number}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{repair.title}</td>
@@ -153,7 +279,8 @@ export default function Dashboard() {
                         </span>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 ) : (
                   <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">ยังไม่มีประวัติการซ่อม</td></tr>
                 )}
@@ -197,12 +324,125 @@ export default function Dashboard() {
             ) : (
               <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">ไม่มีนัดหมายเร็วๆ นี้</div>
             )}
-            <button className="mt-auto w-full py-3.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 flex items-center justify-center gap-2 text-sm font-medium transition-colors">
+            <button
+              type="button"
+              onClick={openAppointmentModal}
+              className="mt-auto w-full py-3.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+            >
               <Plus size={18} /> สร้างนัดหมายใหม่
             </button>
           </div>
         </div>
       </div>
+
+      {isAppointmentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">สร้างนัดหมายใหม่</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">บันทึกวันนัดติดตามรถของคุณจากหน้า dashboard ได้ทันที</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeAppointmentModal}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAppointment}>
+              <div className="space-y-5 p-6">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">เลือกรถ</span>
+                  <select
+                    value={appointmentForm.car_id}
+                    onChange={(event) => setAppointmentForm((current) => ({ ...current, car_id: event.target.value }))}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    {cars.map((car) => (
+                      <option key={car.id} value={car.id}>
+                        {car.brand} {car.model} ({car.plate_number})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">หัวข้อนัดหมาย</span>
+                  <input
+                    value={appointmentForm.title}
+                    onChange={(event) => setAppointmentForm((current) => ({ ...current, title: event.target.value }))}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    placeholder="เช่น เช็กระยะ 50,000 กม."
+                    type="text"
+                  />
+                </label>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">วันนัด</span>
+                    <input
+                      value={appointmentForm.appointment_date}
+                      onChange={(event) => setAppointmentForm((current) => ({ ...current, appointment_date: event.target.value }))}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      type="date"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">สถานะ</span>
+                    <select
+                      value={appointmentForm.status}
+                      onChange={(event) =>
+                        setAppointmentForm((current) => ({
+                          ...current,
+                          status: event.target.value as AppointmentForm['status'],
+                        }))
+                      }
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="scheduled">scheduled</option>
+                      <option value="completed">completed</option>
+                      <option value="cancelled">cancelled</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">สถานที่ / หมายเหตุ</span>
+                  <input
+                    value={appointmentForm.location}
+                    onChange={(event) => setAppointmentForm((current) => ({ ...current, location: event.target.value }))}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    placeholder="เช่น ศูนย์บริการใกล้บ้าน"
+                    type="text"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50/80 px-6 py-4 sm:flex-row sm:justify-end dark:border-slate-800 dark:bg-slate-800/50">
+                <button
+                  type="button"
+                  onClick={closeAppointmentModal}
+                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAppointment}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-primary-500/20 transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <Save size={18} />
+                  {isSavingAppointment ? 'กำลังบันทึก...' : 'บันทึกนัดหมาย'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

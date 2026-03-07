@@ -13,6 +13,7 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import ForgotPassword from '../pages/ForgotPassword';
 import ResetPassword from '../pages/ResetPassword';
 import MyCars from "../pages/Mycars";
+import Repairs from '../pages/Repairs';
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101922] text-primary-600 font-medium">กำลังตรวจสอบข้อมูล...</div>
@@ -94,6 +95,7 @@ export default function AppRouter() {
               <Route path="/dashboard" element={<Dashboard />} />
               {/* 3. หน้าลูกๆ (Dashboard, MyCars) ต้องอยู่ข้างในนี้ */}
               <Route path="/my-cars" element={<MyCars />} />
+              <Route path="/repairs" element={<Repairs />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>
