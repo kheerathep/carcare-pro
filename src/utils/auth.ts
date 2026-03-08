@@ -1,6 +1,5 @@
 // d:\carcare-pro\src\utils\auth.ts
 import { supabase } from '../lib/supabase';
-import toast from 'react-hot-toast';
 
 /**
  * Maps Supabase auth error messages to user-friendly Thai messages.
@@ -38,7 +37,7 @@ export function mapAuthErrorMessage(message: string, isSignUp = false): string {
  * This will now always prompt the user to select an account.
  * @param isSignUp A boolean to indicate if the context is sign-up.
  */
-export const handleGoogleAuth = async (isSignUp: boolean = false) => {
+export const handleGoogleAuth = async (_isSignUp: boolean = false) => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {

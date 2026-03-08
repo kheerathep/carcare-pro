@@ -44,6 +44,10 @@ type RepairRecord = {
   cars?: CarOption | null;
 };
 
+type RepairQueryRow = Omit<RepairRecord, 'cars'> & {
+  cars?: CarOption | CarOption[] | null;
+};
+
 type RepairForm = {
   car_id: string;
   category: string;
@@ -143,6 +147,13 @@ function extractShopName(description?: string | null) {
   return shopLine?.replace('ร้าน/อู่:', '').trim() || 'ไม่ได้ระบุร้าน';
 }
 
+function normalizeRepairs(rows: RepairQueryRow[] | null | undefined): RepairRecord[] {
+  return (rows || []).map((row) => ({
+    ...row,
+    cars: Array.isArray(row.cars) ? row.cars[0] || null : row.cars || null,
+  }));
+}
+
 export default function Repairs() {
   const session = useAuthStore((state) => state.session);
   const location = useLocation();
@@ -183,7 +194,7 @@ export default function Repairs() {
 
         const nextCars = (carsData as CarOption[]) || [];
         setCars(nextCars);
-        setRepairs((repairsData as RepairRecord[]) || []);
+        setRepairs(normalizeRepairs(repairsData as RepairQueryRow[] | null));
         setForm((current) => ({
           ...current,
           car_id: current.car_id || nextCars[0]?.id || '',
@@ -310,7 +321,7 @@ export default function Repairs() {
 
       if (reloadError) throw reloadError;
 
-      setRepairs((repairsData as RepairRecord[]) || []);
+      setRepairs(normalizeRepairs(repairsData as RepairQueryRow[] | null));
       toast.success('บันทึกการซ่อมเรียบร้อยแล้ว');
       closeModal();
     } catch (error) {

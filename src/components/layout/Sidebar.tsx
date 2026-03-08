@@ -1,4 +1,4 @@
-import { CarFront, LayoutDashboard, Wrench, BarChart3, Lock, LogOut } from 'lucide-react';
+import { CarFront, LayoutDashboard, Lock, LogOut, Wrench } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -50,10 +50,6 @@ export default function Sidebar() {
             </>
           )}
         </NavLink>
-        <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
-          <BarChart3 size={20} className="group-hover:text-primary-500 transition-colors" />
-          <span className="text-sm font-medium">การวิเคราะห์</span>
-        </a>
         <a className="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group" href="#">
           <Lock size={20} className="group-hover:text-primary-500 transition-colors" />
           <span className="text-sm font-medium">ตั้งค่า PIN</span>

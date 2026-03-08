@@ -1,13 +1,32 @@
 import { Menu, Bell, Sun, Moon } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
 
+function getPageTitle(pathname: string) {
+  if (pathname.startsWith('/my-cars/')) {
+    return 'รายละเอียดรถยนต์';
+  }
+
+  switch (pathname) {
+    case '/my-cars':
+      return 'รถของฉัน';
+    case '/repairs':
+      return 'บันทึกการซ่อม';
+    case '/dashboard':
+    default:
+      return 'ภาพรวมแดชบอร์ด';
+  }
+}
+
 export default function Header() {
   const { theme, toggleTheme, toggleSidebar } = useAppStore();
+  const location = useLocation();
   const session = useAuthStore((state) => state.session); // 🔥 2. ดึง session มาใช้
   // 🔥 3. ดึงอีเมลมาโชว์ (ตัดเอาแค่ชื่อหน้า @ ถ้าไม่มีชื่อจริง)
   const userEmail = session?.user?.email || 'ผู้ใช้งาน';
   const displayName = userEmail.split('@')[0];
+  const pageTitle = getPageTitle(location.pathname);
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
@@ -15,8 +34,7 @@ export default function Header() {
         <button onClick={toggleSidebar} className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
           <Menu size={24} />
         </button>
-        {/* เราสามารถรับชื่อหน้าจอมาแสดงตรงนี้ได้แบบ Dynamic ในอนาคต */}
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">ภาพรวมแดชบอร์ด</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">{pageTitle}</h2>
       </div>
       
       <div className="flex items-center gap-2 sm:gap-4">

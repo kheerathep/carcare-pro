@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -35,6 +35,12 @@ type CarRecord = {
   created_at?: string | null;
 };
 
+type RepairRecord = {
+  id: string;
+  car_id: string;
+  status: 'pending' | 'in_progress' | 'completed';
+};
+
 type NewCarForm = {
   brand: string;
   model: string;
@@ -60,7 +66,24 @@ const initialFormState: NewCarForm = {
   image_url: '',
 };
 
-function getVehicleStatus(car: CarRecord) {
+function getVehicleStatus(car: CarRecord, repairs: RepairRecord[]) {
+  const isUnderRepair = repairs.some(
+    (repair) => repair.car_id === car.id && repair.status === 'in_progress',
+  );
+
+  if (isUnderRepair) {
+    return {
+      label: 'กำลังซ่อม',
+      tone: 'repairing' as const,
+      icon: Wrench,
+      badgeClass:
+        'bg-blue-500/10 text-blue-600 ring-1 ring-inset ring-blue-500/20 dark:text-blue-400',
+      accentClass: 'group-hover:border-blue-500/40',
+      buttonClass:
+        'bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/20',
+    };
+  }
+
   const mileage = Number(car.mileage || 0);
 
   if (mileage >= 80000) {
@@ -115,10 +138,20 @@ async function getCarsByUserId(userId: string) {
   return (data as CarRecord[]) || [];
 }
 
+async function getRepairsByUserId(userId: string) {
+  const { data, error } = await supabase
+    .from('repairs')
+    .select('id, car_id, status')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data as RepairRecord[]) || [];
+}
+
 export default function MyCars() {
   const session = useAuthStore((state) => state.session);
   const navigate = useNavigate();
   const [cars, setCars] = useState<CarRecord[]>([]);
+  const [repairs, setRepairs] = useState<RepairRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
@@ -131,23 +164,28 @@ export default function MyCars() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // ✅ อยู่ใน component
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
+  const loadData = async () => {
     const userId = session?.user?.id;
     if (!userId) return;
 
-    const loadCars = async () => {
-      try {
-        setIsLoading(true);
-        setCars(await getCarsByUserId(userId));
-      } catch (error) {
-        console.error('Failed to fetch cars:', error);
-        toast.error('โหลดข้อมูลรถไม่สำเร็จ');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadCars();
+    try {
+      setIsLoading(true);
+      const [carsData, repairsData] = await Promise.all([
+        getCarsByUserId(userId),
+        getRepairsByUserId(userId),
+      ]);
+      setCars(carsData);
+      setRepairs(repairsData);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      toast.error('โหลดข้อมูลรถและประวัติซ่อมไม่สำเร็จ');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    void loadData();
   }, [session?.user?.id]);
 
   const resetModalState = () => {
@@ -196,9 +234,19 @@ export default function MyCars() {
       .some((value) => value.toLowerCase().includes(keyword));
   });
 
-  const normalCars = cars.filter((car) => getVehicleStatus(car).tone === 'normal').length;
-  const attentionCars = cars.length - normalCars;
-  const carsWithImages = cars.filter((car) => Boolean(car.image_url)).length;
+  const carStats = useMemo(() => {
+    return cars.reduce(
+      (stats, car) => {
+        const status = getVehicleStatus(car, repairs);
+        if (status.tone === 'normal') stats.normal++;
+        if (status.tone === 'warning') stats.attention++;
+        if (status.tone === 'repairing') stats.repairing++;
+        if (car.image_url) stats.withImages++;
+        return stats;
+      },
+      { normal: 0, attention: 0, repairing: 0, withImages: 0 },
+    );
+  }, [cars, repairs]);
 
   // ✅ handleImageSelect — เก็บ file ไว้ preview และอัปโหลดตอน submit
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -270,7 +318,7 @@ export default function MyCars() {
 
       toast.success(modalMode === 'edit' ? 'บันทึกการแก้ไขเรียบร้อยแล้ว' : 'เพิ่มรถเรียบร้อยแล้ว');
       closeModal();
-      setCars(await getCarsByUserId(session.user.id));
+      void loadData();
     } catch (error) {
       console.error('Failed to submit car:', error);
       const message = error instanceof Error ? error.message : null;
@@ -300,7 +348,7 @@ export default function MyCars() {
       if (error) throw error;
 
       toast.success('ลบรถเรียบร้อย');
-      setCars(await getCarsByUserId(session.user.id));
+      void loadData();
     } catch (error) {
       console.error('Failed to delete car:', error);
       toast.error('ลบรถไม่สำเร็จ');
@@ -309,8 +357,8 @@ export default function MyCars() {
     }
   };
 
-  const handlePlaceholderAction = (label: string, car: CarRecord) => {
-    toast(`${label} ${car.brand} ${car.model} จะเพิ่มให้ในขั้นถัดไป`);
+  const handleOpenCarDetail = (car: CarRecord) => {
+    navigate(`/my-cars/${car.id}`);
   };
 
   const handleOpenRepairForm = (car: CarRecord) => {
@@ -387,7 +435,7 @@ export default function MyCars() {
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">พร้อมใช้งาน</span>
           </div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">สถานะปกติ</p>
-          <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">{normalCars}</p>
+          <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">{carStats.normal}</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -396,7 +444,7 @@ export default function MyCars() {
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">ตรวจเช็ก</span>
           </div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">ต้องติดตาม</p>
-          <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">{attentionCars}</p>
+          <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">{carStats.attention}</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -405,7 +453,7 @@ export default function MyCars() {
             <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">พร้อมภาพ</span>
           </div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">มีรูปประกอบ</p>
-          <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">{carsWithImages}</p>
+          <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">{carStats.withImages}</p>
         </div>
       </section>
 
@@ -437,7 +485,7 @@ export default function MyCars() {
       ) : (
         <section className="grid gap-6">
           {filteredCars.map((car) => {
-            const status = getVehicleStatus(car);
+            const status = getVehicleStatus(car, repairs);
             const StatusIcon = status.icon;
 
             return (
@@ -507,7 +555,7 @@ export default function MyCars() {
                     <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6 dark:border-slate-700">
                       <button
                         type="button"
-                        onClick={() => handlePlaceholderAction('หน้ารายละเอียดของ', car)}
+                        onClick={() => handleOpenCarDetail(car)}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 text-sm font-bold text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
                       >
                         <Eye size={18} />
