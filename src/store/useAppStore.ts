@@ -6,6 +6,7 @@ interface AppState {
   toggleTheme: () => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  setSidebarOpen: (isOpen: boolean) => void; // 👈 ต้องเพิ่มตรงนี้
 }
 
 export const useAppStore = create<AppState>()(
@@ -19,6 +20,8 @@ export const useAppStore = create<AppState>()(
       })),
 
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+      setSidebarOpen: (isOpen: boolean) => set({ isSidebarOpen: isOpen }), // 👈 2. เพิ่มฟังก์ชันนี้ใน Store
     }),
     {
       name: 'carcare-app-storage', // บันทึกลง LocalStorage

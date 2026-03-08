@@ -15,6 +15,7 @@ import ResetPassword from '../pages/ResetPassword';
 import CarDetails from '../pages/CarDetails';
 import MyCars from "../pages/Mycars";
 import Repairs from '../pages/Repairs';
+import Settings from '../pages/Settings'; // 👈 1. เพิ่มบรรทัดนี้เข้ามา
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101922] text-primary-600 font-medium">กำลังตรวจสอบข้อมูล...</div>
@@ -98,6 +99,7 @@ export default function AppRouter() {
               <Route path="/my-cars" element={<MyCars />} />
               <Route path="/my-cars/:carId" element={<CarDetails />} />
               <Route path="/repairs" element={<Repairs />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>
