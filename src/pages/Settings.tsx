@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import {
-    User, Camera, Lock, Shield, Grip, Cloud,
-    EyeOff, Eye, RefreshCw, Settings2, Moon, Globe, LogOut,
-    X, CheckCircle, UploadCloud, ShieldCheck
+    User, Camera, Lock, Shield, Grip,
+    EyeOff, Eye, RefreshCw, Settings2, Moon, LogOut,
+    X,
 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { useNavigate } from 'react-router-dom';
