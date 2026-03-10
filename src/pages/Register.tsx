@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CarFront, Menu, User, Mail, EyeOff, Eye, ArrowRight, Sun, Moon } from 'lucide-react';
+import { Menu, User, Mail, EyeOff, Eye, ArrowRight, Sun, Moon } from 'lucide-react';
+import Logo from '../components/ui/Logo';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
@@ -11,7 +12,7 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [strength, setStrength] = useState(0);
-  
+
   // State สำหรับเก็บข้อมูลฟอร์ม
   const { theme, toggleTheme } = useAppStore();
   const [formData, setFormData] = useState({
@@ -33,7 +34,7 @@ export default function Register() {
     const p = formData.password;
     let s = 0;
     if (!p) { setStrength(0); return; }
-    
+
     if (p.length >= 8) s++;     // ความยาว 8+
     if (/[A-Z]/.test(p)) s++;   // มีตัวพิมพ์ใหญ่
     if (/[a-z]/.test(p)) s++;   // มีตัวพิมพ์เล็ก
@@ -56,7 +57,7 @@ export default function Register() {
   // 2. ฟังก์ชันสมัครด้วย Email & Password
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // ตรวจสอบความถูกต้องเบื้องต้น
     if (!formData.name || !formData.email || !formData.password) {
       toast.error('กรุณากรอกข้อมูลให้ครบทุกช่อง');
@@ -78,7 +79,7 @@ export default function Register() {
 
     try {
       setIsLoading(true);
-      
+
       // ส่งข้อมูลไปสมัครที่ Supabase
       const {
         data: { session },
@@ -104,7 +105,7 @@ export default function Register() {
       // ถ้าสมัครสำเร็จแต่ยังไม่มี session ปกติ Supabase จะส่งอีเมลยืนยัน
       toast.success('สมัครสมาชิกสำเร็จ! กรุณาตรวจสอบอีเมลของคุณเพื่อยืนยันบัญชี', { duration: 5000 });
       navigate('/login', { replace: true });
-      
+
     } catch (error: any) {
       toast.error(mapAuthErrorMessage(error.message, true));
     } finally {
@@ -114,16 +115,14 @@ export default function Register() {
 
   return (
     <div className="bg-slate-50 dark:bg-[#101922] min-h-screen flex flex-col font-sans text-slate-900 dark:text-slate-100 transition-colors duration-200">
-      
+
       {/* Top Navigation Bar */}
       <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-3 bg-white/5 dark:bg-[#111a22]">
-        <div className="flex items-center gap-4 text-slate-900 dark:text-white">
-          <div className="text-primary-600">
-             <CarFront size={28} />
-          </div>
+        <div className="flex items-center gap-3 text-slate-900 dark:text-white">
+          <Logo size={32} />
           <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-[-0.015em]">CarCare Pro</h2>
         </div>
-        
+
         <div className="hidden md:flex flex-1 justify-end gap-8 items-center">
           <Link
             to="/login"
@@ -149,10 +148,10 @@ export default function Register() {
       {/* Main Content Area */}
       <main className="flex-grow flex items-center justify-center p-4 py-12">
         <div className="w-full max-w-[480px] bg-white dark:bg-[#192633] rounded-xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
-          
+
           {/* Hero Image inside card */}
-          <div 
-            className="h-32 w-full bg-cover bg-center relative" 
+          <div
+            className="h-32 w-full bg-cover bg-center relative"
             style={{ backgroundImage: "url('https://images.unsplash.com/photo-1605810230434-7631ac76ec81?q=80&w=1000&auto=format&fit=crop')" }}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-[#192633] to-transparent dark:from-[#192633] from-black/60"></div>
@@ -164,9 +163,9 @@ export default function Register() {
 
           {/* Form Container */}
           <div className="p-6 md:p-8 space-y-6">
-            
+
             {/* Google Sign Up */}
-            <button 
+            <button
               onClick={handleGoogleSignUp}
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-3 bg-white dark:bg-[#111a22] hover:bg-slate-50 dark:hover:bg-[#1a2530] text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 h-12 rounded-lg font-medium transition-colors disabled:opacity-50"
@@ -188,17 +187,17 @@ export default function Register() {
 
             {/* Input Fields */}
             <form className="space-y-5" onSubmit={handleEmailSignUp}>
-              
+
               {/* Name Input */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">ชื่อ-นามสกุล</label>
                 <div className="relative">
-                  <input 
+                  <input
                     id="name"
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all" 
-                    placeholder="กรอกชื่อและนามสกุลของคุณ" 
+                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                    placeholder="กรอกชื่อและนามสกุลของคุณ"
                     type="text"
                   />
                   <User className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -209,12 +208,12 @@ export default function Register() {
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">อีเมล</label>
                 <div className="relative">
-                  <input 
+                  <input
                     id="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all" 
-                    placeholder="example@email.com" 
+                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                    placeholder="example@email.com"
                     type="email"
                   />
                   <Mail className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -225,34 +224,33 @@ export default function Register() {
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">รหัสผ่าน</label>
                 <div className="relative group">
-                  <input 
+                  <input
                     id="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all" 
-                    placeholder="ตั้งรหัสผ่านของคุณ" 
+                    className="w-full h-12 px-4 pl-4 pr-12 rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                    placeholder="ตั้งรหัสผ่านของคุณ"
                     type={showPassword ? "text" : "password"}
                   />
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-0 top-0 h-full px-4 flex items-center justify-center text-slate-400 hover:text-primary-500 transition-colors cursor-pointer" 
+                    className="absolute right-0 top-0 h-full px-4 flex items-center justify-center text-slate-400 hover:text-primary-500 transition-colors cursor-pointer"
                   >
                     {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                   </button>
                 </div>
-                
+
                 {/* Password Strength Meter */}
                 <div className="space-y-1 pt-1">
                   <div className="flex gap-1 h-1.5">
                     {[...Array(4)].map((_, i) => (
                       <div
                         key={i}
-                        className={`h-full flex-1 rounded-full transition-colors duration-300 ${
-                          strength > i
+                        className={`h-full flex-1 rounded-full transition-colors duration-300 ${strength > i
                             ? strength <= 2 ? 'bg-red-500' : strength === 3 ? 'bg-amber-500' : 'bg-emerald-500'
                             : 'bg-slate-200 dark:bg-slate-700'
-                        }`}
+                          }`}
                       />
                     ))}
                   </div>
@@ -304,10 +302,10 @@ export default function Register() {
               </div>
 
               {/* Submit Button */}
-              <button 
+              <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full h-12 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg shadow-primary-500/30 transition-all transform active:scale-[0.98] mt-2 flex items-center justify-center gap-2 disabled:opacity-50" 
+                className="w-full h-12 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg shadow-primary-500/30 transition-all transform active:scale-[0.98] mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span>{isLoading ? 'กำลังโหลด...' : 'สมัครสมาชิก'}</span>
                 {!isLoading && <ArrowRight size={20} />}
@@ -317,7 +315,7 @@ export default function Register() {
             {/* Footer Link */}
             <div className="pt-2 text-center">
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                มีบัญชีอยู่แล้ว? 
+                มีบัญชีอยู่แล้ว?
                 <Link className="text-primary-600 dark:text-primary-500 hover:text-primary-700 font-semibold transition-colors ml-1" to="/login">เข้าสู่ระบบ</Link>
               </p>
             </div>

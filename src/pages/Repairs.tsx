@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  BatteryCharging, CalendarClock, CarFront, CircleDot, ClipboardCheck,
-  Disc3, Droplets, Fuel, MoreHorizontal, Paintbrush, Plus, Save,
-  Search, Settings2, Wind, Wrench, X, Zap, Download, Printer,
-  Edit, Trash2, Image as ImageIcon, Store, CalendarDays, MapPin, Info, UploadCloud, CheckCircle
+  BatteryCharging, CarFront, CircleDot, ClipboardCheck,
+  Disc3, Fuel, MoreHorizontal, Paintbrush, Plus, Save,
+  Search, Settings2, Wind, Wrench, X, Zap, Download,
+  Trash2, Image as ImageIcon, Store, CalendarDays, MapPin, Info, UploadCloud, CheckCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
+import { useRepairStore } from '../store/useRepairStore';
 
 // --- Types ---
 type CarOption = { id: string; brand: string; model: string; plate_number: string; image_url?: string | null; };
@@ -19,7 +19,6 @@ type RepairRecord = {
   receipt_url?: string | null;
   cars?: CarOption | null;
 };
-type RepairQueryRow = Omit<RepairRecord, 'cars'> & { cars?: CarOption | CarOption[] | null; };
 type RepairForm = {
   car_id: string; category: string; title: string; shop_name: string;
   description: string; mileage: string; cost: string;
@@ -78,43 +77,38 @@ function extractCleanDescription(description?: string | null) {
 
 export default function Repairs() {
   const session = useAuthStore((state) => state.session);
-  const location = useLocation();
-  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
+  const repairs = useRepairStore((state) => state.repairs) as RepairRecord[];
+  const fetchRepairs = useRepairStore((state) => state.fetchRepairs);
+
   const [cars, setCars] = useState<CarOption[]>([]);
-  const [repairs, setRepairs] = useState<RepairRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [modalMode, setModalMode] = useState<'create' | 'view' | 'edit' | null>(null);
   const [selectedRepair, setSelectedRepair] = useState<RepairRecord | null>(null);
   const [form, setForm] = useState<RepairForm>(initialFormState);
-  
+
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  
+
   const userDisplayName = session?.user?.email?.split('@')[0] || 'ผู้ใช้งาน';
 
   const loadData = async () => {
     const userId = session?.user?.id;
     if (!userId) return;
     try {
-      setIsLoading(true);
-      const [{ data: carsData }, { data: repairsData }] = await Promise.all([
-        supabase.from('cars').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('repairs').select('*, cars(id, brand, model, plate_number, image_url)').eq('user_id', userId).order('repair_date', { ascending: false }),
-      ]);
+      // Fetch cars for the select box
+      const { data: carsData } = await supabase.from('cars').select('*').eq('user_id', userId).order('created_at', { ascending: false });
       setCars(carsData as CarOption[] || []);
-      setRepairs((repairsData as RepairQueryRow[] || []).map(row => ({
-        ...row, cars: Array.isArray(row.cars) ? row.cars[0] || null : row.cars || null,
-      })));
+
+      // Also fetch repairs through global store
+      await fetchRepairs(userId);
     } catch (error) {
       toast.error('โหลดข้อมูลไม่สำเร็จ');
-    } finally {
-      setIsLoading(false);
+      console.error(error);
     }
   };
 
@@ -238,11 +232,37 @@ export default function Repairs() {
 
   const filteredRepairs = repairs.filter((r) => !searchQuery || [r.title, r.cars?.brand, r.cars?.plate_number].some(v => String(v).toLowerCase().includes(searchQuery.toLowerCase())));
   const totalCost = repairs.reduce((sum, r) => sum + Number(r.cost || 0), 0);
-  const completedCount = repairs.filter((r) => r.status === 'completed').length;
+
+  const handleExportCSV = () => {
+    if (!filteredRepairs.length) return toast.error('ไม่มีข้อมูลให้ส่งออก');
+
+    const headers = ['วันที่ซ่อม', 'หัวข้อบริการ', 'รายละเอียด', 'ศูนย์บริการ', 'เลขไมล์', 'ค่าใช้จ่าย', 'สถานะ'];
+
+    const rows = filteredRepairs.map((r) => [
+      formatDate(r.repair_date),
+      `"${r.title.replace(/"/g, '""')}"`,
+      `"${extractCleanDescription(r.description).replace(/"/g, '""')}"`,
+      `"${extractShopName(r.description).replace(/"/g, '""')}"`,
+      extractMileage(r.description),
+      r.cost,
+      r.status === 'completed' ? 'เสร็จสิ้น' : 'รอ/กำลังซ่อม'
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `carcare_history_${getTodayDate()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 print:m-0 print:p-0">
-      
+
       {/* 🟢 หน้าจอหลัก */}
       <div className="print:hidden space-y-8">
         <header className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
@@ -255,13 +275,17 @@ export default function Repairs() {
             <h2 className="text-3xl font-black text-slate-900 dark:text-white">ประวัติการซ่อมบำรุง</h2>
             <p className="text-slate-500 mt-1">คุณมีบันทึกทั้งหมด {repairs.length} รายการ (รวม {formatMoney(totalCost)})</p>
           </div>
-          <div className="flex gap-3">
-             <label className="relative">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหาประวัติ..." className="h-10 rounded-lg border border-slate-200 bg-white pl-10 pr-4 text-sm focus:border-primary-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white" />
-             </label>
-            <button onClick={() => openCreateModal()} className="bg-primary-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-primary-700 transition shadow-lg shadow-primary-600/20">
-              <Plus size={18} /> เพิ่มบันทึกใหม่
+          <div className="flex flex-wrap gap-3">
+            <label className="relative flex-1 sm:flex-none">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหาประวัติ..." className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 text-sm focus:border-primary-500 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white" />
+            </label>
+            <button onClick={handleExportCSV} className="hidden sm:flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/50 shadow-sm">
+              <Download size={16} />
+              Export CSV
+            </button>
+            <button onClick={() => openCreateModal()} className="h-10 w-full sm:w-auto bg-primary-600 text-white px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary-700 transition shadow-lg shadow-primary-600/20">
+              <Plus size={16} /> เพิ่มบันทึกใหม่
             </button>
           </div>
         </header>
@@ -284,33 +308,33 @@ export default function Repairs() {
                 const CategoryIcon = repairCategories.find(c => c.id === categoryId)?.icon || Wrench;
 
                 return (
-                 <tr key={repair.id} onClick={() => openViewModal(repair)} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors flex flex-col sm:table-row p-4 sm:p-0">
-                   <td className="sm:px-6 sm:py-4 text-sm text-slate-500 dark:text-slate-400 mb-2 sm:mb-0">
-                     <span className="sm:hidden font-bold mr-2">วันที่:</span>{formatDate(repair.repair_date)}
-                   </td>
-                   <td className="sm:px-6 sm:py-4">
-                     <div className="flex items-center gap-3">
-                       <div className="w-8 h-8 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 flex items-center justify-center shrink-0">
-                         <CategoryIcon size={16} />
-                       </div>
-                       <div>
-                         <p className="font-bold text-slate-900 dark:text-white">{repair.title}</p>
-                         <p className="text-xs text-slate-500">{repair.cars?.brand} ({repair.cars?.plate_number})</p>
-                       </div>
-                     </div>
-                   </td>
-                   <td className="sm:px-6 sm:py-4 text-sm text-slate-600 dark:text-slate-300">
-                     <span className="sm:hidden font-bold mr-2">ร้าน:</span>{extractShopName(repair.description)}
-                   </td>
-                   <td className="sm:px-6 sm:py-4 text-right font-bold text-slate-900 dark:text-white">
-                     <span className="sm:hidden mr-2">ราคา:</span>{formatMoney(repair.cost)}
-                   </td>
-                   <td className="sm:px-6 sm:py-4 text-center mt-2 sm:mt-0">
-                     <span className={`px-3 py-1 text-[11px] font-bold rounded-full ${repair.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                  <tr key={repair.id} onClick={() => openViewModal(repair)} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors flex flex-col sm:table-row p-4 sm:p-0">
+                    <td className="sm:px-6 sm:py-4 text-sm text-slate-500 dark:text-slate-400 mb-2 sm:mb-0">
+                      <span className="sm:hidden font-bold mr-2">วันที่:</span>{formatDate(repair.repair_date)}
+                    </td>
+                    <td className="sm:px-6 sm:py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 flex items-center justify-center shrink-0">
+                          <CategoryIcon size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 dark:text-white">{repair.title}</p>
+                          <p className="text-xs text-slate-500">{repair.cars?.brand} ({repair.cars?.plate_number})</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="sm:px-6 sm:py-4 text-sm text-slate-600 dark:text-slate-300">
+                      <span className="sm:hidden font-bold mr-2">ร้าน:</span>{extractShopName(repair.description)}
+                    </td>
+                    <td className="sm:px-6 sm:py-4 text-right font-bold text-slate-900 dark:text-white">
+                      <span className="sm:hidden mr-2">ราคา:</span>{formatMoney(repair.cost)}
+                    </td>
+                    <td className="sm:px-6 sm:py-4 text-center mt-2 sm:mt-0">
+                      <span className={`px-3 py-1 text-[11px] font-bold rounded-full ${repair.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
                         {repair.status === 'completed' ? 'เสร็จสิ้น' : 'รอ/กำลังซ่อม'}
-                     </span>
-                   </td>
-                 </tr>
+                      </span>
+                    </td>
+                  </tr>
                 );
               })}
               {filteredRepairs.length === 0 && (
@@ -329,7 +353,7 @@ export default function Repairs() {
       {modalMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 md:p-8 backdrop-blur-sm print:static print:bg-white print:p-0">
           <div className="bg-white dark:bg-[#101922] w-full max-w-6xl h-full max-h-[850px] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-[#223649] print:shadow-none print:border-none print:h-auto">
-            
+
             {/* --- 🔵 โหมด: View Details --- */}
             {modalMode === 'view' && selectedRepair && (
               <>
@@ -347,77 +371,77 @@ export default function Repairs() {
                     <X size={20} />
                   </button>
                 </div>
-                
-                <div className="p-6 md:p-8 flex-1 overflow-y-auto">
-                   <div className="bg-[#182634] rounded-xl border border-[#223649] overflow-hidden shadow-xl mb-8">
-                     <div className="p-6 border-b border-[#223649] flex flex-wrap justify-between items-center gap-4">
-                       <div className="flex items-center gap-4">
-                         <div className="p-3 bg-primary-600/10 rounded-xl text-primary-600">
-                           <Wrench size={28} />
-                         </div>
-                         <div>
-                           <h3 className="text-xl font-bold text-white">{selectedRepair.title}</h3>
-                           <p className="text-[#90adcb] flex items-center gap-2 mt-1 text-sm">
-                             <CalendarDays size={14} /> {formatDate(selectedRepair.repair_date)} 
-                             <span className="text-[#223649]">|</span>
-                             <MapPin size={14} /> {extractShopName(selectedRepair.description)}
-                           </p>
-                         </div>
-                       </div>
-                       <div className="text-right">
-                         <p className="text-[#90adcb] text-sm uppercase font-bold tracking-wider">ยอดรวมค่าใช้จ่าย</p>
-                         <p className="text-2xl font-black text-primary-600">{formatMoney(selectedRepair.cost)}</p>
-                       </div>
-                     </div>
-                     <div className="p-8 space-y-6">
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-[#90adcb] flex items-center gap-2">
-                          <ClipboardCheck size={18} /> รายละเอียดงานที่ทำ
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           <div className="bg-[#101922]/50 p-4 rounded-lg border border-[#223649] flex items-start gap-3">
-                             <CheckCircle size={20} className="text-primary-600 shrink-0 mt-0.5" />
-                             <div>
-                               <p className="font-bold text-sm text-white">ข้อมูลรถยนต์</p>
-                               <p className="text-xs text-[#90adcb] mt-1">{selectedRepair.cars?.brand} {selectedRepair.cars?.model} ({selectedRepair.cars?.plate_number})</p>
-                             </div>
-                           </div>
-                           <div className="bg-[#101922]/50 p-4 rounded-lg border border-[#223649] flex items-start gap-3">
-                             <CheckCircle size={20} className="text-primary-600 shrink-0 mt-0.5" />
-                             <div>
-                               <p className="font-bold text-sm text-white">เลขไมล์ล่าสุด</p>
-                               <p className="text-xs text-[#90adcb] mt-1">{extractMileage(selectedRepair.description) || '-'} กม.</p>
-                             </div>
-                           </div>
-                           <div className="bg-[#101922]/50 p-4 rounded-lg border border-[#223649] flex items-start gap-3 md:col-span-2">
-                             <Info size={20} className="text-primary-600 shrink-0 mt-0.5" />
-                             <div>
-                               <p className="font-bold text-sm text-white">บันทึกเพิ่มเติม</p>
-                               <p className="text-xs text-[#90adcb] mt-1 whitespace-pre-line">{extractCleanDescription(selectedRepair.description) || 'ไม่มีการระบุรายละเอียด'}</p>
-                             </div>
-                           </div>
-                        </div>
-                     </div>
-                   </div>
 
-                   {/* 🟢 รูปภาพใบเสร็จ (แก้ ZoomIn เป็น Search แล้ว) */}
-                   {selectedRepair.receipt_url && (
-                     <div className="print:hidden">
-                       <h4 className="text-sm font-bold uppercase tracking-widest text-[#90adcb] mb-4 flex items-center gap-2">
-                          <ImageIcon size={18} /> รูปภาพและใบเสร็จ
-                       </h4>
-                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                         <div className="group relative aspect-square rounded-lg overflow-hidden bg-[#101922] border border-[#223649] cursor-pointer">
-                           <a href={selectedRepair.receipt_url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/40 group-hover:bg-black/10 transition-colors z-10 flex items-center justify-center">
-                             <Search className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={32} />
-                           </a>
-                           <img src={selectedRepair.receipt_url} alt="Receipt" className="w-full h-full object-cover" />
-                           <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent z-20">
-                             <p className="text-[10px] text-white truncate">เอกสารแนบ.jpg</p>
-                           </div>
-                         </div>
-                       </div>
-                     </div>
-                   )}
+                <div className="p-6 md:p-8 flex-1 overflow-y-auto">
+                  <div className="bg-[#182634] rounded-xl border border-[#223649] overflow-hidden shadow-xl mb-8">
+                    <div className="p-6 border-b border-[#223649] flex flex-wrap justify-between items-center gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-primary-600/10 rounded-xl text-primary-600">
+                          <Wrench size={28} />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-white">{selectedRepair.title}</h3>
+                          <p className="text-[#90adcb] flex items-center gap-2 mt-1 text-sm">
+                            <CalendarDays size={14} /> {formatDate(selectedRepair.repair_date)}
+                            <span className="text-[#223649]">|</span>
+                            <MapPin size={14} /> {extractShopName(selectedRepair.description)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[#90adcb] text-sm uppercase font-bold tracking-wider">ยอดรวมค่าใช้จ่าย</p>
+                        <p className="text-2xl font-black text-primary-600">{formatMoney(selectedRepair.cost)}</p>
+                      </div>
+                    </div>
+                    <div className="p-8 space-y-6">
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-[#90adcb] flex items-center gap-2">
+                        <ClipboardCheck size={18} /> รายละเอียดงานที่ทำ
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-[#101922]/50 p-4 rounded-lg border border-[#223649] flex items-start gap-3">
+                          <CheckCircle size={20} className="text-primary-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-sm text-white">ข้อมูลรถยนต์</p>
+                            <p className="text-xs text-[#90adcb] mt-1">{selectedRepair.cars?.brand} {selectedRepair.cars?.model} ({selectedRepair.cars?.plate_number})</p>
+                          </div>
+                        </div>
+                        <div className="bg-[#101922]/50 p-4 rounded-lg border border-[#223649] flex items-start gap-3">
+                          <CheckCircle size={20} className="text-primary-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-sm text-white">เลขไมล์ล่าสุด</p>
+                            <p className="text-xs text-[#90adcb] mt-1">{extractMileage(selectedRepair.description) || '-'} กม.</p>
+                          </div>
+                        </div>
+                        <div className="bg-[#101922]/50 p-4 rounded-lg border border-[#223649] flex items-start gap-3 md:col-span-2">
+                          <Info size={20} className="text-primary-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-sm text-white">บันทึกเพิ่มเติม</p>
+                            <p className="text-xs text-[#90adcb] mt-1 whitespace-pre-line">{extractCleanDescription(selectedRepair.description) || 'ไม่มีการระบุรายละเอียด'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 🟢 รูปภาพใบเสร็จ (แก้ ZoomIn เป็น Search แล้ว) */}
+                  {selectedRepair.receipt_url && (
+                    <div className="print:hidden">
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-[#90adcb] mb-4 flex items-center gap-2">
+                        <ImageIcon size={18} /> รูปภาพและใบเสร็จ
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="group relative aspect-square rounded-lg overflow-hidden bg-[#101922] border border-[#223649] cursor-pointer">
+                          <a href={selectedRepair.receipt_url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/40 group-hover:bg-black/10 transition-colors z-10 flex items-center justify-center">
+                            <Search className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={32} />
+                          </a>
+                          <img src={selectedRepair.receipt_url} alt="Receipt" className="w-full h-full object-cover" />
+                          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent z-20">
+                            <p className="text-[10px] text-white truncate">เอกสารแนบ.jpg</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 pb-4 px-6 border-t border-[#223649] flex flex-col sm:flex-row gap-4 items-center justify-between bg-[#101922] print:hidden">
@@ -462,56 +486,64 @@ export default function Repairs() {
                       {modalMode === 'create' && (
                         <div className="space-y-2">
                           <label className="text-sm font-medium dark:text-white">เลือกรถยนต์</label>
-                          <select required value={form.car_id} onChange={e => setForm({...form, car_id: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white">
+                          <select required value={form.car_id} onChange={e => setForm({ ...form, car_id: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white">
                             <option value="">-- เลือกรถยนต์ --</option>
                             {cars.map(c => <option key={c.id} value={c.id}>{c.brand} ({c.plate_number})</option>)}
                           </select>
                         </div>
                       )}
-                      
+
                       <div className="space-y-2">
                         <label className="text-sm font-medium dark:text-white">หัวข้อบริการ</label>
-                        <input required type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" placeholder="เช่น เปลี่ยนน้ำมันเครื่องสังเคราะห์ 100%" />
+                        <input required type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" placeholder="เช่น เปลี่ยนน้ำมันเครื่องสังเคราะห์ 100%" />
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-sm font-medium dark:text-white">วันที่ซ่อม</label>
-                          <input required type="date" value={form.repair_date} onChange={e => setForm({...form, repair_date: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
+                          <input required type="date" value={form.repair_date} onChange={e => setForm({ ...form, repair_date: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium dark:text-white">เลขไมล์ (กม.)</label>
-                          <input type="number" value={form.mileage} onChange={e => setForm({...form, mileage: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
+                          <input type="number" value={form.mileage} onChange={e => setForm({ ...form, mileage: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" />
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-sm font-medium dark:text-white">ศูนย์บริการ / อู่</label>
                         <div className="relative">
-                          <input type="text" value={form.shop_name} onChange={e => setForm({...form, shop_name: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" placeholder="ระบุชื่อศูนย์บริการ" />
+                          <input type="text" value={form.shop_name} onChange={e => setForm({ ...form, shop_name: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" placeholder="ระบุชื่อศูนย์บริการ" />
                           <Store size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <label className="text-sm font-medium dark:text-white">ค่าใช้จ่ายทั้งหมด</label>
                           <div className="relative">
-                            <input required type="number" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" placeholder="0" />
+                            <input required type="number" value={form.cost} onChange={e => setForm({ ...form, cost: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white" placeholder="0" />
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">฿</span>
                           </div>
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium dark:text-white">หมวดหมู่</label>
-                          <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white">
+                          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white">
                             {repairCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium dark:text-white">สถานะการซ่อม</label>
+                          <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as 'pending' | 'in_progress' | 'completed' })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white">
+                            <option value="pending">รอดำเนินการ</option>
+                            <option value="in_progress">กำลังซ่อม</option>
+                            <option value="completed">เสร็จสิ้น</option>
                           </select>
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-sm font-medium dark:text-white">หมายเหตุเพิ่มเติม</label>
-                        <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white resize-none" placeholder="รายละเอียดอื่นๆ..." rows={3}></textarea>
+                        <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-slate-50 dark:bg-[#182634] border border-slate-200 dark:border-[#223649] rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary-500 dark:text-white resize-none" placeholder="รายละเอียดอื่นๆ..." rows={3}></textarea>
                       </div>
                     </form>
                   </div>

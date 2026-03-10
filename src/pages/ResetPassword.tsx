@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CarFront, EyeOff, Eye, CheckCircle2, Circle, Sun, Moon } from 'lucide-react';
+import { EyeOff, Eye, CheckCircle2, Circle, Sun, Moon } from 'lucide-react';
+import Logo from '../components/ui/Logo';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
@@ -20,26 +21,26 @@ export default function ResetPassword() {
   // คำนวณความปลอดภัยของรหัสผ่านแบบ Real-time
   useEffect(() => {
     let s = 0;
-    if (!password) { 
-      setStrength(0); 
+    if (!password) {
+      setStrength(0);
       setHasNumber(false);
       setHasSpecialChar(false);
-      return; 
+      return;
     }
-    
+
     if (password.length >= 8) s++;
-    
+
     const numMatch = /[0-9]/.test(password);
     setHasNumber(numMatch);
     if (numMatch) s++;
-    
+
     const specialMatch = /[^A-Za-z0-9]/.test(password);
     setHasSpecialChar(specialMatch);
     if (specialMatch) s++;
-    
+
     if (/[A-Z]/.test(password)) s++;
     if (/[a-z]/.test(password)) s++;
-    
+
     setStrength(Math.min(s, 4));
   }, [password]);
 
@@ -103,13 +104,11 @@ export default function ResetPassword() {
     <div className="bg-slate-50 dark:bg-[#101922] text-slate-900 dark:text-slate-100 font-sans min-h-screen flex flex-col transition-colors duration-200">
       {/* Header */}
       <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-10 py-3 bg-white dark:bg-[#111a22] sticky top-0 z-50">
-        <div className="flex items-center gap-4 text-slate-900 dark:text-white">
-          <div className="text-primary-600">
-            <CarFront size={28} />
-          </div>
+        <div className="flex items-center gap-3 text-slate-900 dark:text-white">
+          <Logo size={32} />
           <h2 className="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">CarCare Pro</h2>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={toggleTheme}
@@ -170,25 +169,25 @@ export default function ResetPassword() {
                   <p className="text-slate-700 dark:text-white text-sm font-medium leading-normal">ความปลอดภัยของรหัสผ่าน</p>
                   <span className={`text-sm font-bold ${getStrengthColor()}`}>{getStrengthLabel()}</span>
                 </div>
-                
+
                 <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-300 ${getStrengthBgColor()}`} 
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${getStrengthBgColor()}`}
                     style={{ width: `${(strength / 4) * 100}%` }}
                   ></div>
                 </div>
-                
+
                 <div className="flex flex-wrap gap-3 mt-1">
                   <span className={`text-xs flex items-center gap-1 ${password.length >= 8 ? 'text-primary-600 dark:text-primary-500' : 'text-slate-500 dark:text-[#92adc9]'}`}>
-                    {password.length >= 8 ? <CheckCircle2 size={14} /> : <Circle size={14} />} 
+                    {password.length >= 8 ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                     8+ ตัวอักษร
                   </span>
                   <span className={`text-xs flex items-center gap-1 ${hasNumber ? 'text-primary-600 dark:text-primary-500' : 'text-slate-500 dark:text-[#92adc9]'}`}>
-                    {hasNumber ? <CheckCircle2 size={14} /> : <Circle size={14} />} 
+                    {hasNumber ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                     ตัวเลข
                   </span>
                   <span className={`text-xs flex items-center gap-1 ${hasSpecialChar ? 'text-primary-600 dark:text-primary-500' : 'text-slate-500 dark:text-[#92adc9]'}`}>
-                    {hasSpecialChar ? <CheckCircle2 size={14} /> : <Circle size={14} />} 
+                    {hasSpecialChar ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                     อักขระพิเศษ
                   </span>
                 </div>
@@ -220,7 +219,7 @@ export default function ResetPassword() {
             </div>
 
             {/* Submit Button */}
-            <button 
+            <button
               type="submit"
               disabled={isLoading || password !== confirmPassword || password.length < 8}
               className="mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-primary-600 hover:bg-primary-700 text-white text-base font-bold leading-normal tracking-[0.015em] transition-colors shadow-lg shadow-primary-600/20 disabled:opacity-50"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CarFront, Wrench, Banknote, Calendar, TrendingUp, History, MapPin, MoreHorizontal, Plus, PlusCircle, Save, X } from 'lucide-react';
+import { CarFront, Wrench, Banknote, Calendar, TrendingUp, History, MapPin, Plus, PlusCircle, Save, X, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { differenceInDays, startOfDay } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { fetchDashboardData } from '../services/api';
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSavingAppointment, setIsSavingAppointment] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState<AppointmentForm>({
     car_id: '',
@@ -71,8 +73,35 @@ export default function Dashboard() {
   }, [session?.user?.id]);
 
   const totalCost = repairs.reduce((sum, item) => sum + Number(item.cost || 0), 0);
-  const upcomingAppointments = appointments.filter(a => a.status === 'scheduled');
+  const upcomingAppointments = appointments.filter(a => a.status !== 'cancelled').slice(0, 5);
   const recentRepairs = repairs.slice(0, 5);
+
+  const getExpirationAlerts = () => {
+    const alerts: { car: Car, type: 'tax' | 'insurance', daysLeft: number, isExpired: boolean, date: string }[] = [];
+    const today = startOfDay(new Date());
+
+    cars.forEach(car => {
+      if (car.tax_expiry_date) {
+        const taxDate = startOfDay(new Date(car.tax_expiry_date));
+        const daysLeft = differenceInDays(taxDate, today);
+        if (daysLeft <= 30) {
+          alerts.push({ car, type: 'tax', daysLeft, isExpired: daysLeft < 0, date: car.tax_expiry_date });
+        }
+      }
+      if (car.insurance_expiry_date) {
+        const insDate = startOfDay(new Date(car.insurance_expiry_date));
+        const daysLeft = differenceInDays(insDate, today);
+        if (daysLeft <= 30) {
+          alerts.push({ car, type: 'insurance', daysLeft, isExpired: daysLeft < 0, date: car.insurance_expiry_date });
+        }
+      }
+    });
+
+    alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+    return alerts;
+  };
+
+  const expirationAlerts = getExpirationAlerts();
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
@@ -160,6 +189,50 @@ export default function Dashboard() {
     }
   };
 
+  const confirmDeleteAppointment = async () => {
+    if (!deleteId) return;
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.from('appointments').delete().eq('id', deleteId);
+      if (error) throw error;
+
+      toast.success('ลบรายการนัดหมายเรียบร้อย');
+      if (session?.user?.id) {
+        await loadDashboardData(session.user.id);
+      }
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      toast.error('ไม่สามารถลบรายการได้');
+    } finally {
+      setIsLoading(false);
+      setDeleteId(null);
+    }
+  };
+
+  const getStatusClasses = (status: string) => {
+    switch (status) {
+      case 'completed': return {
+        borderHover: 'hover:border-emerald-300 dark:hover:border-emerald-500/40',
+        stripe: 'bg-emerald-400 dark:bg-emerald-500/50',
+        badgeBg: 'bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
+        badgeText: 'text-emerald-600 dark:text-emerald-400'
+      };
+      case 'cancelled': return {
+        borderHover: 'hover:border-rose-300 dark:hover:border-rose-500/40',
+        stripe: 'bg-rose-400 dark:bg-rose-500/50',
+        badgeBg: 'bg-rose-100 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20',
+        badgeText: 'text-rose-600 dark:text-rose-400'
+      };
+      case 'scheduled':
+      default: return {
+        borderHover: 'hover:border-primary-300 dark:hover:border-primary-500/40',
+        stripe: 'bg-primary-400 dark:bg-primary-500/50',
+        badgeBg: 'bg-primary-100 dark:bg-primary-500/10 border-primary-200 dark:border-primary-500/20',
+        badgeText: 'text-primary-600 dark:text-primary-400'
+      };
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div></div>;
   }
@@ -179,6 +252,42 @@ export default function Dashboard() {
           <PlusCircle size={20} /> เพิ่มรายการซ่อมด่วน
         </button>
       </div>
+
+      {expirationAlerts.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {expirationAlerts.map((alert, idx) => {
+            const isRed = alert.isExpired;
+            const bgClass = isRed ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-800 dark:text-red-300' : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-300';
+            const iconClass = isRed ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400';
+            const Icon = isRed ? ShieldAlert : AlertTriangle;
+
+            return (
+              <div key={idx} className={`p-4 rounded-xl border flex items-start sm:items-center gap-4 shadow-sm animate-[fadeIn_0.5s_ease-out] ${bgClass}`}>
+                <div className={`p-2 bg-white/60 dark:bg-slate-900/40 rounded-lg ${iconClass}`}>
+                  <Icon size={20} />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold flex items-center gap-2">
+                    {alert.type === 'tax' ? 'เตือนต่อภาษีรถยนต์' : 'เตือนต่อประกันภัย'}
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/50 dark:bg-black/20">
+                      {alert.car.brand} {alert.car.model} ({alert.car.plate_number})
+                    </span>
+                  </h4>
+                  <p className="text-sm mt-0.5 opacity-90">
+                    {alert.isExpired ? `เลยกำหนดมาแล้ว ${Math.abs(alert.daysLeft)} วัน (ตั้งแต่ ${formatDate(alert.date)})` : alert.daysLeft === 0 ? `หมดอายุวันนี้` : `อีก ${alert.daysLeft} วัน (ครบกำหนด ${formatDate(alert.date)})`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate(`/my-cars/${alert.car.id}`)}
+                  className={`hidden sm:inline-flex px-4 py-2 rounded-lg text-sm font-bold bg-white/50 hover:bg-white/80 dark:bg-black/20 dark:hover:bg-black/40 transition-colors border border-transparent hover:border-current`}
+                >
+                  จัดการ
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-sm">
@@ -256,29 +365,29 @@ export default function Dashboard() {
                     const repairCar = repair.cars as CarWithImage | undefined;
 
                     return (
-                    <tr key={repair.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900 dark:text-white flex items-center gap-3">
-                        <div
-                          className="h-9 w-9 rounded-lg bg-slate-200 dark:bg-slate-700 bg-cover bg-center ring-1 ring-slate-200 dark:ring-slate-600"
-                          style={{ backgroundImage: `url('${repairCar?.image_url || DEFAULT_CAR_IMAGE}')` }}
-                        ></div>
-                        <div className="flex flex-col">
-                          <span>{repairCar?.brand} {repairCar?.model}</span>
-                          <span className="text-xs text-slate-500">{repairCar?.plate_number}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{repair.title}</td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{formatDate(repair.repair_date)}</td>
-                      <td className="px-6 py-4 text-slate-900 dark:text-white text-right font-semibold">{formatMoney(repair.cost)}</td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${repair.status === 'completed'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
-                          }`}>
-                          {repair.status}
-                        </span>
-                      </td>
-                    </tr>
+                      <tr key={repair.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-white flex items-center gap-3">
+                          <div
+                            className="h-9 w-9 rounded-lg bg-slate-200 dark:bg-slate-700 bg-cover bg-center ring-1 ring-slate-200 dark:ring-slate-600"
+                            style={{ backgroundImage: `url('${repairCar?.image_url || DEFAULT_CAR_IMAGE}')` }}
+                          ></div>
+                          <div className="flex flex-col">
+                            <span>{repairCar?.brand} {repairCar?.model}</span>
+                            <span className="text-xs text-slate-500">{repairCar?.plate_number}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{repair.title}</td>
+                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{formatDate(repair.repair_date)}</td>
+                        <td className="px-6 py-4 text-slate-900 dark:text-white text-right font-semibold">{formatMoney(repair.cost)}</td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${repair.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                            }`}>
+                            {repair.status === 'completed' ? 'เสร็จสิ้น' : 'รอ/กำลังซ่อม'}
+                          </span>
+                        </td>
+                      </tr>
                     );
                   })
                 ) : (
@@ -294,33 +403,46 @@ export default function Dashboard() {
             <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2.5 text-lg">
               <Calendar size={20} className="text-purple-500 dark:text-purple-400" /> นัดหมาย
             </h3>
-            <button className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"><MoreHorizontal size={20} /></button>
+
           </div>
           <div className="p-5 flex flex-col gap-4">
             {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.map((appt) => (
-                <div key={appt.id} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-4 rounded-xl hover:border-orange-300 dark:hover:border-orange-500/40 cursor-pointer relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-orange-400 dark:bg-orange-500/50"></div>
-                  <div className="flex justify-between items-start mb-2 pl-2">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-orange-100 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded px-2 py-0.5 text-xs font-bold uppercase border border-orange-200 dark:border-orange-500/20">
-                        {formatDate(appt.appointment_date)}
-                      </span>
+              upcomingAppointments.map((appt) => {
+                const sc = getStatusClasses(appt.status);
+                return (
+                  <div key={appt.id} className={`bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-4 rounded-xl cursor-pointer relative overflow-hidden transition-colors ${sc.borderHover}`}>
+                    <div className={`absolute top-0 left-0 w-1 h-full ${sc.stripe}`}></div>
+                    <div className="flex justify-between items-start mb-2 pl-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase border ${sc.badgeBg} ${sc.badgeText}`}>
+                          {formatDate(appt.appointment_date)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(appt.id);
+                        }}
+                        className="text-slate-400 hover:text-red-500 transition-colors bg-white dark:bg-slate-800 rounded-lg p-1.5 shadow-sm border border-slate-200 dark:border-slate-700"
+                        title="ลบนัดหมาย"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <div className="pl-2">
+                      <h4 className="text-slate-900 dark:text-white font-medium">{appt.title}</h4>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 mb-3">
+                        {appt.cars?.brand} {appt.cars?.model} - ทะเบียน {appt.cars?.plate_number}
+                      </p>
+                      {appt.location && (
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <MapPin size={14} /> {appt.location}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="pl-2">
-                    <h4 className="text-slate-900 dark:text-white font-medium">{appt.title}</h4>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 mb-3">
-                      {appt.cars?.brand} {appt.cars?.model} - ทะเบียน {appt.cars?.plate_number}
-                    </p>
-                    {appt.location && (
-                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <MapPin size={14} /> {appt.location}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">ไม่มีนัดหมายเร็วๆ นี้</div>
             )}
@@ -334,6 +456,35 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-500">
+              <Trash2 size={32} />
+            </div>
+            <h3 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">ยืนยันการลบ</h3>
+            <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
+              คุณแน่ใจหรือไม่ว่าต้องการลบนัดหมายนี้? ข้อมูลจะไม่สามารถกู้คืนได้
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="flex-1 rounded-xl bg-slate-100 px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmDeleteAppointment}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 font-bold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-700 active:scale-95"
+              >
+                ลบข้อมูล
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isAppointmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
@@ -403,9 +554,9 @@ export default function Dashboard() {
                       }
                       className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
-                      <option value="scheduled">scheduled</option>
-                      <option value="completed">completed</option>
-                      <option value="cancelled">cancelled</option>
+                      <option value="scheduled">รอดำเนินการ</option>
+                      <option value="completed">เสร็จสิ้น</option>
+                      <option value="cancelled">ยกเลิก</option>
                     </select>
                   </label>
                 </div>

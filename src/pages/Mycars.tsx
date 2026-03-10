@@ -68,7 +68,7 @@ const initialFormState: NewCarForm = {
 
 function getVehicleStatus(car: CarRecord, repairs: RepairRecord[]) {
   const isUnderRepair = repairs.some(
-    (repair) => repair.car_id === car.id && repair.status === 'in_progress',
+    (repair) => repair.car_id === car.id && (repair.status === 'in_progress' || repair.status === 'pending'),
   );
 
   if (isUnderRepair) {
@@ -183,7 +183,7 @@ export default function MyCars() {
       setIsLoading(false);
     }
   };
-  
+
   useEffect(() => {
     void loadData();
   }, [session?.user?.id]);

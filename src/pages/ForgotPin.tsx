@@ -1,20 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CarFront, Mail, Send, ArrowLeft, CheckCircle, RefreshCw, Sun, Moon, HelpCircle, Lock } from 'lucide-react'
+import { Mail, Send, ArrowLeft, CheckCircle, RefreshCw, Sun, Moon, HelpCircle, Lock } from 'lucide-react'
+import Logo from '../components/ui/Logo';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/useAppStore';
 
 export default function ForgotPin() {
   const { theme, toggleTheme } = useAppStore();
-  
+
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
   // ระบบนับเวลาถอยหลังเมื่อส่งอีเมลแล้ว
- useEffect(() => {
+  useEffect(() => {
     let timer: ReturnType<typeof setTimeout>; // 👈 แก้เป็นคำนี้ครับ
     if (step === 2 && countdown > 0) {
       timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
@@ -32,7 +33,7 @@ export default function ForgotPin() {
 
     try {
       setIsLoading(true);
-      
+
       // ส่งคำสั่ง Reset Password ไปยัง Supabase (เพื่อใช้ยืนยันตัวตนก่อนตั้ง PIN ใหม่)
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/pin-setup`,
@@ -52,12 +53,12 @@ export default function ForgotPin() {
 
   const handleResend = () => {
     if (countdown > 0) return;
-    handleSendResetLink({ preventDefault: () => {} } as React.FormEvent);
+    handleSendResetLink({ preventDefault: () => { } } as React.FormEvent);
   };
 
   return (
     <div className="bg-slate-50 dark:bg-[#101922] text-slate-900 dark:text-slate-100 min-h-screen flex items-center justify-center p-4 font-sans transition-colors duration-300">
-      
+
       {/* Background Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-[10%] -left-[5%] w-[40%] h-[40%] bg-primary-500/10 dark:bg-primary-500/5 rounded-full blur-[120px]"></div>
@@ -76,13 +77,11 @@ export default function ForgotPin() {
       </div>
 
       <div className="w-full max-w-md relative z-10">
-        
+
         {/* Header Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white dark:bg-[#1c2a38] border border-slate-200 dark:border-slate-700/50 mb-4 shadow-xl shadow-slate-200/50 dark:shadow-black/20">
-            <div className="w-10 h-10 rounded-xl bg-primary-600 flex items-center justify-center text-white">
-              <CarFront size={24} />
-            </div>
+          <div className="inline-flex items-center justify-center mb-4">
+            <Logo size={64} className="drop-shadow-xl" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">CarCare Pro</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">ระบบจัดการรถยนต์ครบวงจร</p>
@@ -200,11 +199,10 @@ export default function ForgotPin() {
                   <button
                     onClick={handleResend}
                     disabled={countdown > 0 || isLoading}
-                    className={`w-full py-3 px-4 font-medium rounded-xl border flex items-center justify-center gap-2 transition-all ${
-                      countdown > 0 
-                        ? 'bg-slate-50 dark:bg-[#101922] text-slate-400 border-slate-200 dark:border-slate-800 cursor-not-allowed' 
+                    className={`w-full py-3 px-4 font-medium rounded-xl border flex items-center justify-center gap-2 transition-all ${countdown > 0
+                        ? 'bg-slate-50 dark:bg-[#101922] text-slate-400 border-slate-200 dark:border-slate-800 cursor-not-allowed'
                         : 'bg-white dark:bg-[#1c2a38] text-primary-600 dark:text-primary-400 border-primary-200 dark:border-primary-500/30 hover:bg-primary-50 dark:hover:bg-primary-500/10 cursor-pointer'
-                    }`}
+                      }`}
                   >
                     <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
                     {isLoading ? 'กำลังส่ง...' : 'ส่งอีเมลอีกครั้ง'}

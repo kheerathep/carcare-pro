@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Menu, CarFront, EyeOff, Eye, Sun, Moon } from 'lucide-react';
+import { Menu, EyeOff, Eye, Sun, Moon } from 'lucide-react';
+import Logo from '../components/ui/Logo';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { mapAuthErrorMessage, handleGoogleAuth } from '../utils/auth';
@@ -29,7 +30,7 @@ export default function Login() {
     }
   };
 
- const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!email || !password) {
@@ -48,9 +49,9 @@ export default function Login() {
       if (error) throw error;
 
       toast.success('เข้าสู่ระบบสำเร็จ');
-      
-      navigate('/login-pin', { replace: true }); 
-      
+
+      navigate('/login-pin', { replace: true });
+
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       toast.error(mapAuthErrorMessage(message));
@@ -61,16 +62,14 @@ export default function Login() {
 
   return (
     <div className="bg-slate-50 dark:bg-[#101922] font-sans min-h-screen flex flex-col overflow-x-hidden text-slate-900 dark:text-slate-100 transition-colors duration-200">
-      
+
       {/* Navigation */}
       <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 lg:px-10 py-3 bg-white/5 dark:bg-[#111a22]">
-        <div className="flex items-center gap-4 text-slate-900 dark:text-white">
-          <div className="text-primary-600">
-            <CarFront size={28} />
-          </div>
+        <div className="flex items-center gap-3 text-slate-900 dark:text-white">
+          <Logo size={32} />
           <h2 className="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">CarCare Pro</h2>
         </div>
-        
+
         <div className="hidden md:flex flex-1 justify-end gap-8">
           <Link
             to="/register"
@@ -79,8 +78,8 @@ export default function Login() {
             <span className="truncate">สมัครสมาชิก</span>
           </Link>
         </div>
-        
-        <button 
+
+        <button
           onClick={toggleTheme}
           className="p-2 ml-4 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           title="สลับโหมดหน้าจอ"
@@ -97,10 +96,10 @@ export default function Login() {
       {/* Main Content */}
       <main className="flex-grow flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white dark:bg-[#192633] rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-          
+
           {/* Hero Image / Header within card */}
-          <div 
-            className="h-32 bg-cover bg-center relative" 
+          <div
+            className="h-32 bg-cover bg-center relative"
             style={{ backgroundImage: "url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=1000&auto=format&fit=crop')" }}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-[#192633] to-transparent dark:from-[#192633] from-white/90"></div>
@@ -112,7 +111,7 @@ export default function Login() {
 
           <div className="p-6 pt-2">
             <form className="flex flex-col gap-5 mt-4" onSubmit={handleEmailLogin}>
-              
+
               {/* Email Input */}
               <div className="flex flex-col gap-2">
                 <label className="text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal" htmlFor="email">อีเมล</label>
@@ -129,8 +128,8 @@ export default function Login() {
                 </div>
                 <div className="relative flex w-full items-stretch">
                   <input className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-r-none text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary-500 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] focus:border-primary-500 h-12 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 text-base font-normal leading-normal border-r-0" id="password" placeholder="••••••••" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} />
-                  <button 
-                    className="flex items-center justify-center px-4 rounded-r-lg border border-l-0 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer" 
+                  <button
+                    className="flex items-center justify-center px-4 rounded-r-lg border border-l-0 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#111a22] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                   >
@@ -152,10 +151,10 @@ export default function Login() {
               </div>
 
               {/* Google Login Button */}
-              <button 
+              <button
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
-                className="flex w-full cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-lg h-12 px-5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#111a22] hover:bg-slate-50 dark:hover:bg-[#1a2530] transition-colors text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal disabled:opacity-50" 
+                className="flex w-full cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-lg h-12 px-5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#111a22] hover:bg-slate-50 dark:hover:bg-[#1a2530] transition-colors text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal disabled:opacity-50"
                 type="button"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -167,8 +166,8 @@ export default function Login() {
                 <span>{isLoading ? 'กำลังเชื่อมต่อ...' : 'เข้าสู่ระบบด้วย Google'}</span>
               </button>
 
-            
-            
+
+
             </form>
           </div>
 
@@ -178,7 +177,7 @@ export default function Login() {
               ยังไม่มีบัญชี? <Link className="text-primary-600 dark:text-primary-500 font-semibold hover:underline ml-1" to="/register">สมัครสมาชิก</Link>
             </p>
           </div>
-          
+
         </div>
       </main>
     </div>

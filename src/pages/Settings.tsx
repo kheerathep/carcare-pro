@@ -4,12 +4,15 @@ import {
     EyeOff, Eye, RefreshCw, Settings2, Moon, Globe, LogOut,
     X, CheckCircle, UploadCloud, ShieldCheck
 } from 'lucide-react';
+import imageCompression from 'browser-image-compression';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import toast from 'react-hot-toast';
+import { useAppStore } from '../store/useAppStore';
 
 export default function Settings() {
+
     const navigate = useNavigate();
     const session = useAuthStore((state) => state.session);
     const initializeAuth = useAuthStore((state) => state.initializeAuth);
@@ -18,34 +21,42 @@ export default function Settings() {
     const userEmail = session?.user?.email || 'user@carcare.pro';
     const userMetaData = session?.user?.user_metadata || {};
     const displayName = userMetaData.full_name || userEmail.split('@')[0];
+    const phoneNumber = userMetaData.phone_number || '';
     const avatarUrl = userMetaData.avatar_url || null;
 
-    const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+    const theme = useAppStore((state) => state.theme);
+    const toggleTheme = useAppStore((state) => state.toggleTheme);
+    const isDarkMode = theme === 'dark';
 
     // 🟢 Modal States
     const [isPinModalOpen, setIsPinModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isCompressing, setIsCompressing] = useState(false); // เพิ่ม State สำหรับตอนกำลังบีบอัดรูป
 
     // 🟢 Form States (Profile)
     const [editName, setEditName] = useState(displayName);
+    const [editPhone, setEditPhone] = useState(phoneNumber);
     const [profileFile, setProfileFile] = useState<File | null>(null);
     const [profilePreview, setProfilePreview] = useState<string | null>(avatarUrl);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // 🟢 Form States (Password)
-    const [currentPassword, setCurrentPassword] = useState(''); // เพิ่มรหัสผ่านปัจจุบัน
+    const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPwd0, setShowPwd0] = useState(false); // ตาสำหรับรหัสเดิม
+    const [showPwd0, setShowPwd0] = useState(false);
     const [showPwd1, setShowPwd1] = useState(false);
     const [showPwd2, setShowPwd2] = useState(false);
 
     const toggleDarkMode = () => {
-        setIsDarkMode(!isDarkMode);
-        if (!isDarkMode) document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
+        toggleTheme();
+        if (theme === 'light') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
     };
 
     const handleLogout = async () => {
@@ -57,17 +68,39 @@ export default function Settings() {
         }
     };
 
-    // 📸 อัปโหลดรูปโปรไฟล์
-    const handleProfileFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            if (file.size > 2 * 1024 * 1024) return toast.error('ขนาดรูปต้องไม่เกิน 2MB');
-            setProfileFile(file);
-            setProfilePreview(URL.createObjectURL(file));
+    // 📸 เลือกรูปและบีบอัด (ทำงานเมื่อผู้ใช้กดเลือกไฟล์)
+    const handleProfileFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsCompressing(true); // เปิดโหมดกำลังโหลด
+
+            // 1. ตั้งค่าการบีบอัดรูป
+            const options = {
+                maxSizeMB: 0.5, // บีบอัดให้ไม่เกิน 500KB
+                maxWidthOrHeight: 800, // ลดขนาดกว้าง/ยาวสูงสุด
+                useWebWorker: true,
+            };
+
+            // 2. เริ่มบีบอัดรูป
+            const compressedFile = await imageCompression(file, options);
+
+            // 3. เซ็ตไฟล์ที่บีบอัดแล้วลง State เพื่อรอกดบันทึก
+            setProfileFile(compressedFile);
+
+            // 4. สร้าง URL ชั่วคราวเพื่อให้แสดง Preview ได้ทันที
+            setProfilePreview(URL.createObjectURL(compressedFile));
+
+        } catch (error) {
+            console.error('Error compressing image:', error);
+            toast.error('เกิดข้อผิดพลาดในการจัดการรูปภาพ');
+        } finally {
+            setIsCompressing(false); // ปิดโหมดกำลังโหลด
         }
     };
 
-    // 💾 บันทึกโปรไฟล์
+    // 💾 บันทึกโปรไฟล์ (อัปโหลดรูปที่บีบอัดแล้วขึ้น Supabase)
     const handleSaveProfile = async () => {
         if (!session?.user?.id) return;
         try {
@@ -79,6 +112,7 @@ export default function Settings() {
                 const fileName = `${session.user.id}_${Date.now()}.${fileExt}`;
                 const filePath = `${session.user.id}/${fileName}`;
 
+                // ใช้ชื่อ Bucket ว่า 'avatars' (ตรวจสอบใน Supabase ให้แน่ใจว่าสร้างแล้ว)
                 const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, profileFile, { upsert: true });
                 if (uploadError) throw new Error('อัปโหลดรูปล้มเหลว');
 
@@ -87,10 +121,23 @@ export default function Settings() {
             }
 
             const { error } = await supabase.auth.updateUser({
-                data: { full_name: editName, avatar_url: finalAvatarUrl }
+                data: { full_name: editName, phone_number: editPhone, avatar_url: finalAvatarUrl }
             });
 
             if (error) throw error;
+
+            // Update the public.profiles table as well
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: session.user.id,
+                full_name: editName,
+                phone_number: editPhone,
+                avatar_url: finalAvatarUrl,
+                updated_at: new Date().toISOString()
+            });
+
+            if (profileError) {
+                console.error("Error updating public.profiles:", profileError);
+            }
 
             toast.success('อัปเดตโปรไฟล์เรียบร้อย!');
             await initializeAuth();
@@ -111,7 +158,7 @@ export default function Settings() {
         try {
             setIsSaving(true);
 
-            // 1. เช็คว่ารหัสเดิมถูกไหม (ด้วยการพยายาม Login ซ้ำแบบเงียบๆ)
+            // 1. เช็คว่ารหัสเดิมถูกไหม
             const { error: verifyError } = await supabase.auth.signInWithPassword({
                 email: userEmail,
                 password: currentPassword,
@@ -157,13 +204,13 @@ export default function Settings() {
                             <User size={24} />
                             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">โปรไฟล์ผู้ใช้</h3>
                         </div>
-                        <button onClick={() => { setEditName(displayName); setProfilePreview(avatarUrl); setIsProfileModalOpen(true); }} className="px-4 py-2 bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold rounded-lg text-sm hover:bg-primary-100 dark:hover:bg-primary-900/40 transition">
+                        <button onClick={() => { setEditName(displayName); setEditPhone(phoneNumber); setProfilePreview(avatarUrl); setProfileFile(null); setIsProfileModalOpen(true); }} className="px-4 py-2 bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold rounded-lg text-sm hover:bg-primary-100 dark:hover:bg-primary-900/40 transition">
                             แก้ไขโปรไฟล์
                         </button>
                     </div>
 
                     <div className="flex flex-col md:flex-row md:items-center gap-8 relative z-10">
-                        {/* 🎯 รูปโปรไฟล์ (ถ้าไม่มีรูป ให้โชว์ไอคอน User) */}
+                        {/* 🎯 รูปโปรไฟล์ */}
                         <div className="relative group w-28 h-28 shrink-0 mx-auto md:mx-0">
                             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-md">
                                 {avatarUrl ? (
@@ -180,6 +227,10 @@ export default function Settings() {
                                 <div className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{displayName}</div>
                             </div>
                             <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">เบอร์โทรศัพท์</label>
+                                <div className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 text-slate-500 dark:text-slate-400">{phoneNumber || '-'}</div>
+                            </div>
+                            <div className="space-y-1.5 md:col-span-2">
                                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">อีเมลบัญชี</label>
                                 <div className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm px-4 py-3 text-slate-500 dark:text-slate-400">{userEmail}</div>
                             </div>
@@ -263,33 +314,46 @@ export default function Settings() {
                         </div>
 
                         <div className="space-y-6">
+                            {/* Input File เปลี่ยนไปผูกกับ handleProfileFileChange เพื่อบีบอัดทันที */}
                             <input type="file" ref={fileInputRef} onChange={handleProfileFileChange} accept="image/*" className="hidden" />
 
                             <div className="flex flex-col items-center gap-3">
                                 <div className="relative group w-24 h-24">
-                                    {/* 🎯 รูปโปรไฟล์ (ถ้าไม่มีโชว์ User ไอคอน) */}
-                                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-md">
+                                    <div className={`w-24 h-24 rounded-full overflow-hidden border-4 border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-md ${isCompressing ? 'opacity-50' : ''}`}>
                                         {profilePreview ? (
                                             <img src={profilePreview} alt="Preview" className="w-full h-full object-cover" />
                                         ) : (
                                             <User size={40} className="text-slate-400 dark:text-slate-500" />
                                         )}
+                                        {/* โชว์ Loading ตอนกำลังบีบอัดรูป */}
+                                        {isCompressing && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                <RefreshCw size={24} className="text-white animate-spin" />
+                                            </div>
+                                        )}
                                     </div>
-                                    <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 p-2 bg-primary-600 text-white rounded-full shadow-lg hover:bg-primary-700 border-2 border-white dark:border-slate-900">
+                                    <button onClick={() => fileInputRef.current?.click()} disabled={isCompressing} className="absolute bottom-0 right-0 p-2 bg-primary-600 text-white rounded-full shadow-lg hover:bg-primary-700 border-2 border-white dark:border-slate-900 disabled:bg-gray-400">
                                         <Camera size={14} />
                                     </button>
                                 </div>
-                                <p className="text-xs text-slate-500">รองรับ JPG, PNG สูงสุด 2MB</p>
+                                <p className="text-xs text-slate-500">ระบบจะทำการย่อขนาดรูปอัตโนมัติ</p>
                             </div>
 
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">ชื่อแสดงผล</label>
-                                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all" />
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">ชื่อแสดงผล</label>
+                                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">เบอร์โทรศัพท์</label>
+                                    <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all" />
+                                </div>
                             </div>
 
                             <div className="flex gap-3 pt-4">
                                 <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors">ยกเลิก</button>
-                                <button onClick={handleSaveProfile} disabled={isSaving} className="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold shadow-lg shadow-primary-500/30 transition-all disabled:opacity-50">
+                                {/* ปิดปุ่มเซฟ หากกำลังบันทึก หรือกำลังบีบอัดรูปอยู่ */}
+                                <button onClick={handleSaveProfile} disabled={isSaving || isCompressing} className="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold shadow-lg shadow-primary-500/30 transition-all disabled:opacity-50">
                                     {isSaving ? 'กำลังบันทึก...' : 'บันทึกโปรไฟล์'}
                                 </button>
                             </div>
@@ -299,7 +363,7 @@ export default function Settings() {
             )}
 
             {/* =========================================
-          🔵 MODAL 2: เปลี่ยนรหัสผ่าน (มีปุ่มลืมรหัสผ่าน)
+          🔵 MODAL 2: เปลี่ยนรหัสผ่าน
           ========================================= */}
             {isPasswordModalOpen && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
@@ -310,8 +374,6 @@ export default function Settings() {
                         </div>
 
                         <div className="p-6 overflow-y-auto space-y-5">
-
-                            {/* 🎯 ช่องกรอกรหัสผ่านปัจจุบัน พร้อมปุ่มลืมรหัสผ่าน */}
                             <div className="space-y-1.5">
                                 <div className="flex justify-between items-center">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">รหัสผ่านปัจจุบัน</label>
@@ -319,11 +381,10 @@ export default function Settings() {
                                         type="button"
                                         onClick={async () => {
                                             try {
-                                                // สั่งให้ Supabase ส่งอีเมลรีเซ็ตรหัสผ่านไปที่อีเมลของผู้ใช้เลย
                                                 const { error } = await supabase.auth.resetPasswordForEmail(userEmail);
                                                 if (error) throw error;
                                                 toast.success('ส่งลิงก์รีเซ็ตรหัสผ่านไปที่อีเมลของคุณแล้ว!');
-                                                setIsPasswordModalOpen(false); // ปิดหน้าต่าง
+                                                setIsPasswordModalOpen(false);
                                             } catch (error: any) {
                                                 toast.error('ไม่สามารถส่งอีเมลได้: ' + error.message);
                                             }
@@ -343,7 +404,6 @@ export default function Settings() {
 
                             <div className="h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
 
-                            {/* ช่องรหัสผ่านใหม่ */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">รหัสผ่านใหม่</label>
                                 <div className="relative">
@@ -373,7 +433,6 @@ export default function Settings() {
                                     <div className={`h-full transition-all duration-300 ${strengthColor}`} style={{ width: `${passwordStrength}%` }}></div>
                                 </div>
                             </div>
-
                         </div>
                         <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex gap-3 bg-slate-50 dark:bg-slate-900/50">
                             <button onClick={() => setIsPasswordModalOpen(false)} className="flex-1 px-4 h-11 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">ยกเลิก</button>
@@ -386,7 +445,7 @@ export default function Settings() {
             )}
 
             {/* =========================================
-          🟠 MODAL 3: เปลี่ยนรหัส PIN (มีปุ่มลืม PIN)
+          🟠 MODAL 3: เปลี่ยนรหัส PIN
           ========================================= */}
             {isPinModalOpen && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
@@ -402,7 +461,6 @@ export default function Settings() {
                             <button onClick={() => navigate('/pin-setup')} className="flex-1 px-4 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition-all">เปลี่ยน PIN</button>
                         </div>
 
-                        {/* 🎯 ปุ่มลืมรหัส PIN */}
                         <button onClick={() => { setIsPinModalOpen(false); navigate('/forgot-pin'); }} className="text-sm font-bold text-primary-600 dark:text-primary-400 hover:underline">
                             ลืมรหัส PIN ใช่หรือไม่?
                         </button>

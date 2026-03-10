@@ -5,12 +5,20 @@ import {
   CalendarClock,
   CarFront,
   CheckCircle2,
+  Droplets,
+  FileText,
+  Fuel,
+  GalleryVerticalEnd,
   Gauge,
   MapPin,
   Palette,
   ReceiptText,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  Upload,
   Wrench,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -27,6 +35,9 @@ type CarRecord = {
   color?: string | null;
   image_url: string | null;
   mileage?: number | null;
+  tax_expiry_date?: string | null;
+  insurance_expiry_date?: string | null;
+  insurance_company?: string | null;
   created_at?: string | null;
 };
 
@@ -51,6 +62,27 @@ type AppointmentRecord = {
   location: string | null;
   status: 'scheduled' | 'completed' | 'cancelled';
   created_at?: string | null;
+};
+
+type FuelLogRecord = {
+  id: string;
+  car_id: string;
+  user_id: string;
+  log_date: string;
+  mileage: number;
+  volume_liters: number;
+  total_cost: number;
+  created_at: string;
+};
+
+type DocumentRecord = {
+  id: string;
+  car_id: string;
+  user_id: string;
+  document_name: string;
+  document_type: string;
+  file_url: string;
+  created_at: string;
 };
 
 type RepairDescription = {
@@ -163,7 +195,7 @@ function getRepairStatusMeta(status: RepairRecord['status']) {
       };
     default:
       return {
-        label: 'นัดหมาย',
+        label: 'รอดำเนินการ',
         className:
           'bg-primary-500/10 text-primary-600 ring-1 ring-inset ring-primary-500/20 dark:text-primary-400',
         icon: CalendarClock,
@@ -202,7 +234,38 @@ export default function CarDetails() {
   const [car, setCar] = useState<CarRecord | null>(null);
   const [repairs, setRepairs] = useState<RepairRecord[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [fuelLogs, setFuelLogs] = useState<FuelLogRecord[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Tabs State
+  const [activeTab, setActiveTab] = useState<'repairs' | 'fuel' | 'glovebox'>('repairs');
+
+  // Document Modal State
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docName, setDocName] = useState('');
+  const [docType, setDocType] = useState('other');
+
+  // Fuel Log Modal State
+  const [isFuelModalOpen, setIsFuelModalOpen] = useState(false);
+  const [isSavingFuel, setIsSavingFuel] = useState(false);
+  const [fuelForm, setFuelForm] = useState({
+    log_date: new Date().toISOString().split('T')[0],
+    mileage: '',
+    volume_liters: '',
+    total_cost: ''
+  });
+
+  // Tax & Insurance Modal State
+  const [isTaxModalOpen, setIsTaxModalOpen] = useState(false);
+  const [isSavingTax, setIsSavingTax] = useState(false);
+  const [taxForm, setTaxForm] = useState({
+    tax_expiry_date: '',
+    insurance_expiry_date: '',
+    insurance_company: '',
+  });
 
   useEffect(() => {
     const userId = session?.user?.id;
@@ -220,10 +283,12 @@ export default function CarDetails() {
           { data: carData, error: carError },
           { data: repairData, error: repairError },
           { data: appointmentData, error: appointmentError },
+          { data: fuelData, error: fuelError },
+          { data: docData, error: docError },
         ] = await Promise.all([
           supabase
             .from('cars')
-            .select('id, user_id, brand, model, plate_number, year, color, image_url, mileage, created_at')
+            .select('id, user_id, brand, model, plate_number, year, color, image_url, mileage, tax_expiry_date, insurance_expiry_date, insurance_company, created_at')
             .eq('user_id', userId)
             .eq('id', carId)
             .maybeSingle(),
@@ -239,15 +304,31 @@ export default function CarDetails() {
             .eq('user_id', userId)
             .eq('car_id', carId)
             .order('appointment_date', { ascending: true }),
+          supabase
+            .from('fuel_logs')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('car_id', carId)
+            .order('log_date', { ascending: false }),
+          supabase
+            .from('car_documents')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('car_id', carId)
+            .order('created_at', { ascending: false }),
         ]);
 
         if (carError) throw carError;
         if (repairError) throw repairError;
         if (appointmentError) throw appointmentError;
+        if (fuelError) throw fuelError;
+        if (docError) throw docError;
 
         setCar((carData as CarRecord | null) || null);
         setRepairs((repairData as RepairRecord[]) || []);
         setAppointments((appointmentData as AppointmentRecord[]) || []);
+        setFuelLogs((fuelData as FuelLogRecord[]) || []);
+        setDocuments((docData as DocumentRecord[]) || []);
       } catch (error) {
         console.error('Failed to load car details:', error);
         toast.error('โหลดรายละเอียดรถไม่สำเร็จ');
@@ -288,6 +369,147 @@ export default function CarDetails() {
         carId: car.id,
       },
     });
+  };
+
+  const openFuelModal = () => {
+    setFuelForm({
+      log_date: new Date().toISOString().split('T')[0],
+      mileage: car?.mileage ? String(car.mileage) : '',
+      volume_liters: '',
+      total_cost: ''
+    });
+    setIsFuelModalOpen(true);
+  };
+
+  const handleCreateFuelLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!car || !session?.user?.id) return;
+    try {
+      setIsSavingFuel(true);
+
+      const payload = {
+        car_id: car.id,
+        user_id: session.user.id,
+        log_date: new Date(fuelForm.log_date).toISOString(),
+        mileage: Number(fuelForm.mileage) || 0,
+        volume_liters: Number(fuelForm.volume_liters) || 0,
+        total_cost: Number(fuelForm.total_cost) || 0,
+      };
+
+      const { data, error } = await supabase
+        .from('fuel_logs')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setFuelLogs(prev => [data as FuelLogRecord, ...prev].sort((a, b) => new Date(b.log_date).getTime() - new Date(a.log_date).getTime()));
+
+      // Update car mileage if new fuel log has higher mileage
+      if (payload.mileage > (car.mileage || 0)) {
+        await supabase.from('cars').update({ mileage: payload.mileage }).eq('id', car.id);
+        setCar({ ...car, mileage: payload.mileage });
+      }
+
+      toast.success('บันทึกค่าน้ำมันเรียบร้อยแล้ว');
+      setIsFuelModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('ไม่สามารถบันทึกค่าน้ำมันได้');
+    } finally {
+      setIsSavingFuel(false);
+    }
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!car || !session?.user?.id || !docFile) return;
+
+    try {
+      setIsUploadingDoc(true);
+      const fileExt = docFile.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${session.user.id}/${car.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('car-documents')
+        .upload(filePath, docFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('car-documents')
+        .getPublicUrl(filePath);
+
+      const payload = {
+        car_id: car.id,
+        user_id: session.user.id,
+        document_name: docName || docFile.name,
+        document_type: docType,
+        file_url: publicUrl,
+      };
+
+      const { data, error: insertError } = await supabase
+        .from('car_documents')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      setDocuments(prev => [data as DocumentRecord, ...prev]);
+      toast.success('อัปโหลดเอกสารเรียบร้อย');
+      setIsDocModalOpen(false);
+      setDocFile(null);
+      setDocName('');
+    } catch (error) {
+      console.error(error);
+      toast.error('ไม่สามารถอัปโหลดเอกสารได้');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const openTaxModal = () => {
+    if (!car) return;
+    setTaxForm({
+      tax_expiry_date: car.tax_expiry_date || '',
+      insurance_expiry_date: car.insurance_expiry_date || '',
+      insurance_company: car.insurance_company || '',
+    });
+    setIsTaxModalOpen(true);
+  };
+
+  const handleUpdateTaxInsurance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!car || !session?.user?.id) return;
+
+    try {
+      setIsSavingTax(true);
+      const payload = {
+        tax_expiry_date: taxForm.tax_expiry_date || null,
+        insurance_expiry_date: taxForm.insurance_expiry_date || null,
+        insurance_company: taxForm.insurance_company || null,
+      };
+
+      const { error } = await supabase
+        .from('cars')
+        .update(payload)
+        .eq('id', car.id)
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+
+      setCar({ ...car, ...payload });
+      toast.success('อัปเดตข้อมูลภาษีและประกันเรียบร้อย');
+      setIsTaxModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('บันทึกข้อมูลไม่สำเร็จ');
+    } finally {
+      setIsSavingTax(false);
+    }
   };
 
   if (isLoading) {
@@ -544,123 +766,307 @@ export default function CarDetails() {
 
   const timelineSection = (
     <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800/95 md:p-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-slate-600 dark:bg-slate-700/70 dark:text-slate-300">
-            <Wrench size={14} />
-            Service Timeline
-          </div>
-          <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            ไทม์ไลน์การดูแลรถ
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-            ดูรายการซ่อมล่าสุดของรถคันนี้ พร้อมสถานะ ค่าใช้จ่าย และบันทึกจากอู่หรือศูนย์บริการ
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6 dark:border-slate-700">
+        <div className="flex bg-slate-100 p-1.5 rounded-2xl dark:bg-slate-900 w-full sm:w-fit">
+          <button
+            onClick={() => setActiveTab('repairs')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'repairs' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          >
+            <Wrench size={16} /> ประวัติการซ่อม
+          </button>
+          <button
+            onClick={() => setActiveTab('fuel')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'fuel' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          >
+            <Fuel size={16} /> บันทึกน้ำมัน
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenRepairForm}
-          className="hidden h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-primary-300 hover:text-primary-600 dark:border-slate-700 dark:text-slate-200 dark:hover:border-primary-500/50 dark:hover:text-primary-300 md:inline-flex"
-        >
-          <Wrench size={16} />
-          เพิ่มรายการ
-        </button>
+
+        {activeTab === 'repairs' ? (
+          <button
+            type="button"
+            onClick={handleOpenRepairForm}
+            className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-primary-300 hover:text-primary-600 dark:border-slate-700 dark:text-slate-200 dark:hover:border-primary-500/50 dark:hover:text-primary-300 w-full sm:w-auto"
+          >
+            <Wrench size={16} />
+            เพิ่มรายการซ่อม
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={openFuelModal}
+            className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:text-slate-200 dark:hover:border-blue-500/50 dark:hover:text-blue-300 w-full sm:w-auto"
+          >
+            <Droplets size={16} />
+            บันทึกเติมน้ำมัน
+          </button>
+        )}
       </div>
 
-      {repairs.length ? (
-        <div className="mt-8 space-y-4">
-          {repairs.map((repair) => {
-            const meta = getRepairStatusMeta(repair.status);
-            const parsedDescription = parseRepairDescription(repair.description);
-            const RepairIcon = meta.icon;
+      {activeTab === 'repairs' ? (
+        // Repairs Timeline
+        repairs.length ? (
+          <div className="mt-8 space-y-4 animate-[fadeIn_0.5s_ease-out]">
+            {repairs.map((repair) => {
+              const meta = getRepairStatusMeta(repair.status);
+              const parsedDescription = parseRepairDescription(repair.description);
+              const RepairIcon = meta.icon;
 
-            return (
-              <article
-                key={repair.id}
-                className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 transition hover:border-primary-200 dark:border-slate-700 dark:bg-slate-900/45 dark:hover:border-primary-500/30 md:p-6"
-              >
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex gap-4">
-                    <div className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
-                      <RepairIcon size={20} />
+              return (
+                <article
+                  key={repair.id}
+                  className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 transition hover:border-primary-200 dark:border-slate-700 dark:bg-slate-900/45 dark:hover:border-primary-500/30 md:p-6"
+                >
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex gap-4">
+                      <div className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
+                        <RepairIcon size={20} />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                            {repair.title}
+                          </h3>
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${meta.className}`}
+                          >
+                            {meta.label}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-sm text-slate-500 dark:text-slate-400">
+                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                            <CalendarClock size={14} />
+                            {formatDate(repair.repair_date)}
+                          </span>
+                          {parsedDescription.category ? (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                              <Sparkles size={14} />
+                              {parsedDescription.category}
+                            </span>
+                          ) : null}
+                          {parsedDescription.mileage ? (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                              <Gauge size={14} />
+                              {parsedDescription.mileage}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {parsedDescription.shopName ? (
+                          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            อู่/ศูนย์บริการ: {parsedDescription.shopName}
+                          </p>
+                        ) : null}
+
+                        {parsedDescription.detail ? (
+                          <p className="max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                            {parsedDescription.detail}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                          {repair.title}
-                        </h3>
-                        <span
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${meta.className}`}
-                        >
-                          {meta.label}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-                          <CalendarClock size={14} />
-                          {formatDate(repair.repair_date)}
-                        </span>
-                        {parsedDescription.category ? (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-                            <Sparkles size={14} />
-                            {parsedDescription.category}
-                          </span>
-                        ) : null}
-                        {parsedDescription.mileage ? (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-                            <Gauge size={14} />
-                            {parsedDescription.mileage}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {parsedDescription.shopName ? (
-                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                          อู่/ศูนย์บริการ: {parsedDescription.shopName}
-                        </p>
-                      ) : null}
-
-                      {parsedDescription.detail ? (
-                        <p className="max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-                          {parsedDescription.detail}
-                        </p>
-                      ) : null}
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:min-w-[200px]">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        ค่าใช้จ่าย
+                      </p>
+                      <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">
+                        {formatMoney(repair.cost)}
+                      </p>
                     </div>
                   </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-8 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center dark:border-slate-700 dark:bg-slate-900/35 animate-[fadeIn_0.5s_ease-out]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+              <Wrench size={24} />
+            </div>
+            <h3 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">
+              ยังไม่มีประวัติการซ่อมของรถคันนี้
+            </h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              เริ่มบันทึกรายการดูแลครั้งแรกเพื่อให้หน้า detail นี้แสดงภาพรวมการใช้งานได้ครบขึ้น
+            </p>
+          </div>
+        )
+      ) : activeTab === 'fuel' ? (
+        // Fuel Log Timeline
+        fuelLogs.length ? (
+          <div className="mt-8 space-y-4 animate-[fadeIn_0.5s_ease-out]">
+            {fuelLogs.map((log) => {
+              // Wait, km/L calculation requires delta mileage. 
+              // So maybe just Cost/Liter instead for a simple display
+              const costPerLiter = log.volume_liters ? log.total_cost / log.volume_liters : 0;
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:min-w-[200px]">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                      ค่าใช้จ่าย
-                    </p>
-                    <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">
-                      {formatMoney(repair.cost)}
+              return (
+                <article
+                  key={log.id}
+                  className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 transition hover:border-blue-200 dark:border-slate-700 dark:bg-slate-900/45 dark:hover:border-blue-500/30 md:p-6"
+                >
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex gap-4">
+                      <div className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-blue-400 dark:ring-slate-700">
+                        <Fuel size={20} />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                            เติมน้ำมัน
+                          </h3>
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20">
+                            {log.volume_liters} ลิตร
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-sm text-slate-500 dark:text-slate-400">
+                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                            <CalendarClock size={14} />
+                            {formatDate(log.log_date)}
+                          </span>
+                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                            <Gauge size={14} />
+                            {formatMileage(log.mileage)}
+                          </span>
+                        </div>
+
+                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                          เฉลี่ย {costPerLiter.toFixed(2)} บาท/ลิตร
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 lg:min-w-[200px]">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        ยอดชำระ
+                      </p>
+                      <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">
+                        {formatMoney(log.total_cost)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-8 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center dark:border-slate-700 dark:bg-slate-900/35 animate-[fadeIn_0.5s_ease-out]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+              <Fuel size={24} />
+            </div>
+            <h3 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">
+              ยังไม่มีบันทึกค่าน้ำมัน
+            </h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              เริ่มบันทึกข้อมูลการเติมน้ำมันเพื่อให้ระบบวิเคราะห์อัตราสิ้นเปลืองให้คุณ
+            </p>
+          </div>
+        )
+      ) : (
+        // Glovebox Timeline
+        documents.length ? (
+          <div className="mt-8 space-y-4 animate-[fadeIn_0.5s_ease-out]">
+            {documents.map((doc) => (
+              <article
+                key={doc.id}
+                className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 transition hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800/80"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white line-clamp-1">
+                      {doc.document_name}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider font-semibold">
+                      {doc.document_type} • {formatDate(doc.created_at)}
                     </p>
                   </div>
                 </div>
+                <a
+                  href={doc.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-700 dark:hover:text-white"
+                >
+                  เปิดดู
+                </a>
               </article>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="mt-8 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center dark:border-slate-700 dark:bg-slate-900/35">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
-            <Wrench size={24} />
+            ))}
           </div>
-          <h3 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">
-            ยังไม่มีประวัติการซ่อมของรถคันนี้
-          </h3>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            เริ่มบันทึกรายการดูแลครั้งแรกเพื่อให้หน้า detail นี้แสดงภาพรวมการใช้งานได้ครบขึ้น
-          </p>
-        </div>
+        ) : (
+          <div className="mt-8 rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center dark:border-slate-700 dark:bg-slate-900/35 animate-[fadeIn_0.5s_ease-out]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+              <GalleryVerticalEnd size={24} />
+            </div>
+            <h3 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">
+              เก็บเอกสารประจำรถ
+            </h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              อัปโหลดกรมธรรม์, ทะเบียนรถ, รูปถ่ายใบเสร็จต่างๆ ไว้ที่นี่
+            </p>
+          </div>
+        )
       )}
     </div>
   );
 
   const sidebarSection = (
     <div className="space-y-6">
+      <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
+        <div className="flex items-center justify-between mb-4">
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+            <ShieldCheck size={14} />
+            Tax & Insurance
+          </div>
+          <button
+            onClick={openTaxModal}
+            className="text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-500/10 dark:text-primary-400 p-1.5 rounded-xl transition-colors"
+          >
+            <Wrench size={16} />
+          </button>
+        </div>
+        <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white mb-6">
+          ภาษีและประกันภัย
+        </h2>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-slate-50/80 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white rounded-xl shadow-sm dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
+                <ReceiptText size={20} className="text-slate-600 dark:text-slate-300" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-1">วันต่อภาษี</p>
+                <p className="font-bold text-slate-900 dark:text-white">
+                  {car.tax_expiry_date ? formatDate(car.tax_expiry_date) : 'ยังไม่ระบุ'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-slate-50/80 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white rounded-xl shadow-sm dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
+                <ShieldAlert size={20} className="text-slate-600 dark:text-slate-300" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-1">ประกัน {car.insurance_company ? `(${car.insurance_company})` : ''}</p>
+                <p className="font-bold text-slate-900 dark:text-white">
+                  {car.insurance_expiry_date ? formatDate(car.insurance_expiry_date) : 'ยังไม่ระบุ'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
         <div className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-primary-600 dark:bg-primary-500/10 dark:text-primary-300">
           <CalendarClock size={14} />
@@ -820,6 +1226,247 @@ export default function CarDetails() {
         {timelineSection}
         {sidebarSection}
       </section>
+
+      {isFuelModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                  <Droplets size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">บันทึกค่าน้ำมัน</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">ช่วยคำนวณอัตราสิ้นเปลืองและค่าใช้จ่ายต่อเดือน</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFuelModalOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateFuelLog}>
+              <div className="space-y-5 p-6 md:p-8">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">วันที่เติมน้ำมัน</span>
+                  <input
+                    type="date"
+                    required
+                    value={fuelForm.log_date}
+                    onChange={(e) => setFuelForm({ ...fuelForm, log_date: e.target.value })}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">ยอดชำระ (บาท)</span>
+                    <input
+                      type="number"
+                      required
+                      step="0.01"
+                      value={fuelForm.total_cost}
+                      onChange={(e) => setFuelForm({ ...fuelForm, total_cost: e.target.value })}
+                      placeholder="เช่น 1500"
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">ปริมาณ (ลิตร)</span>
+                    <input
+                      type="number"
+                      required
+                      step="0.01"
+                      value={fuelForm.volume_liters}
+                      onChange={(e) => setFuelForm({ ...fuelForm, volume_liters: e.target.value })}
+                      placeholder="เช่น 40.5"
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">เลขไมล์รถหน้าปัด (กม.)</span>
+                  <input
+                    type="number"
+                    required
+                    value={fuelForm.mileage}
+                    onChange={(e) => setFuelForm({ ...fuelForm, mileage: e.target.value })}
+                    placeholder="เช่น 51000"
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                  <p className="text-xs text-slate-500 mt-1.5">ใช้เพื่อเก็บสถิติระยะทางวิ่ง</p>
+                </label>
+              </div>
+              <div className="flex flex-col-reverse justify-end gap-3 border-t border-slate-200 bg-slate-50/80 px-6 py-4 sm:flex-row dark:border-slate-800 dark:bg-slate-800/50">
+                <button
+                  type="button"
+                  onClick={() => setIsFuelModalOpen(false)}
+                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingFuel}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSavingFuel ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isDocModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  <Upload size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">อัปโหลดเอกสาร</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">ไฟล์ไม่เกิน 5MB (PDF/JPG/PNG)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDocModalOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleUploadDocument}>
+              <div className="space-y-5 p-6 md:p-8">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">เลือกไฟล์</span>
+                  <input
+                    type="file"
+                    required
+                    onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                    className="h-12 w-full file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-500/10 dark:file:text-primary-400 file:transition text-slate-900 dark:text-slate-300"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">ชื่อเอกสาร</span>
+                  <input
+                    type="text"
+                    value={docName}
+                    onChange={(e) => setDocName(e.target.value)}
+                    placeholder="เช่น กรมธรรม์ปี 2567, ใบเสร็จแบตเตอรี่"
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                  <p className="text-xs text-slate-500 mt-1.5">หากไม่กรอก ระบบจะใช้ชื่อไฟล์แทน</p>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">ประเภท</span>
+                  <select
+                    value={docType}
+                    onChange={(e) => setDocType(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="insurance">กรมธรรม์ประกันภัย</option>
+                    <option value="registration">สมุดจดทะเบียน (เล่มฟ้า/สำเนา)</option>
+                    <option value="receipt">ใบเสร็จ/ใบกำกับภาษี</option>
+                    <option value="other">อื่นๆ</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-col-reverse justify-end gap-3 border-t border-slate-200 bg-slate-50/80 px-6 py-4 sm:flex-row dark:border-slate-800 dark:bg-slate-800/50">
+                <button
+                  type="button"
+                  onClick={() => setIsDocModalOpen(false)}
+                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingDoc || !docFile}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                >
+                  {isUploadingDoc ? 'กำลังอัปโหลด...' : 'บันทึกเอกสาร'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isTaxModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                  <ShieldCheck size={20} />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">จัดการข้อมูลภาษีและประกัน</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTaxModalOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateTaxInsurance}>
+              <div className="space-y-5 p-6 md:p-8">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">วันครบกำหนดต่อภาษีรถยนต์</span>
+                  <input
+                    type="date"
+                    value={taxForm.tax_expiry_date}
+                    onChange={(e) => setTaxForm({ ...taxForm, tax_expiry_date: e.target.value })}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">บริษัทประกันภัย</span>
+                  <input
+                    type="text"
+                    value={taxForm.insurance_company}
+                    onChange={(e) => setTaxForm({ ...taxForm, insurance_company: e.target.value })}
+                    placeholder="เช่น วิริยะ, กรุงเทพประกันภัย"
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">วันหมดอายุประกันภัย</span>
+                  <input
+                    type="date"
+                    value={taxForm.insurance_expiry_date}
+                    onChange={(e) => setTaxForm({ ...taxForm, insurance_expiry_date: e.target.value })}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </label>
+              </div>
+              <div className="flex flex-col-reverse justify-end gap-3 border-t border-slate-200 bg-slate-50/80 px-6 py-4 sm:flex-row dark:border-slate-800 dark:bg-slate-800/50">
+                <button
+                  type="button"
+                  onClick={() => setIsTaxModalOpen(false)}
+                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingTax}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-primary-500/20 transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSavingTax ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

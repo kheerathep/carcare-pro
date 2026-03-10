@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CarFront, Delete, Lock, Mail, X, Sun, Moon } from 'lucide-react';
+import { Delete, Lock, Mail, X, Sun, Moon } from 'lucide-react';
+import Logo from '../components/ui/Logo';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
@@ -110,8 +111,8 @@ export default function LoginPin() {
   return (
     <div className="bg-slate-50 dark:bg-[#101922] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
       <header className="relative z-[100] flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-6 md:px-10 py-4 bg-slate-50 dark:bg-[#101922]">
-        <div className="flex items-center gap-3 text-primary-600">
-          <CarFront size={28} />
+        <div className="flex items-center gap-3">
+          <Logo size={32} />
           <h2 className="text-slate-900 dark:text-white text-xl font-bold tracking-tight">CarCare Pro</h2>
         </div>
 

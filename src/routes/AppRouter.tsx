@@ -16,6 +16,9 @@ import CarDetails from '../pages/CarDetails';
 import MyCars from "../pages/Mycars";
 import Repairs from '../pages/Repairs';
 import Settings from '../pages/Settings'; // 👈 1. เพิ่มบรรทัดนี้เข้ามา
+import Notifications from '../pages/Notifications';
+import Analytics from '../pages/Analytics';
+import Appointments from '../pages/Appointments';
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101922] text-primary-600 font-medium">กำลังตรวจสอบข้อมูล...</div>
@@ -34,7 +37,7 @@ const GuestGuard = () => {
     if (isPinVerified) return <Navigate to="/dashboard" replace />;
     return <Navigate to="/login-pin" replace />;
   }
-  return <Outlet />; 
+  return <Outlet />;
 };
 
 // 2. Guard สำหรับคนที่ "ล็อกอินแล้ว" 
@@ -51,7 +54,7 @@ const AuthGuard = () => {
 // 3. Guard หวงห้าม (ต้องผ่าน PIN เท่านั้น ถึงจะเข้า Dashboard ได้)
 const PinGuard = () => {
   const { isPinVerified } = useAuthStore();
-  
+
   if (!isPinVerified) {
     // ถ้ายังไม่ได้ยืนยัน PIN ให้เด้งไปหน้า PIN
     return <Navigate to="/login-pin" replace />;
@@ -74,7 +77,7 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        
+
         {/* กลุ่มที่ 1: เข้าได้ตอนยังไม่ล็อกอิน */}
         <Route element={<GuestGuard />}>
           <Route path="/login" element={<Login />} />
@@ -82,10 +85,10 @@ export default function AppRouter() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
         </Route>
-        
+
         {/* กลุ่มที่ 2: ต้องมีเซสชัน (Login แล้ว) ถึงเข้าได้ */}
         <Route element={<AuthGuard />}>
-          
+
           {/* หน้าจัดการ PIN (เป็นทั้งหน้าตั้งค่า และหน้าปลดล็อก) */}
           <Route path="/login-pin" element={<LoginPin />} />
           <Route path="/pin-setup" element={<PinSetup />} />
@@ -99,18 +102,21 @@ export default function AppRouter() {
               <Route path="/my-cars" element={<MyCars />} />
               <Route path="/my-cars/:carId" element={<CarDetails />} />
               <Route path="/repairs" element={<Repairs />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/appointments" element={<Appointments />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>
 
         </Route>
-        
+
         <Route path="*" element={<Navigate to="/login" replace />} />
-        
-        
+
+
       </Routes>
-      
+
     </BrowserRouter>
   );
 }
