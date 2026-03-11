@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
     User, Camera, Lock, Shield, Grip,
     EyeOff, Eye, RefreshCw, Settings2, Moon, LogOut,
-    X,
+    X
 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { useNavigate } from 'react-router-dom';
