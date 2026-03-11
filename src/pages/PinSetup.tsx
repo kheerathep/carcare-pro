@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Menu, Lock, ShieldCheck, Delete, ArrowRight, ArrowLeft, RotateCcw, Sun, Moon } from 'lucide-react';
 import Logo from '../components/ui/Logo';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { useAppStore } from '../store/useAppStore';
 import { hashPin, isValidPin, saveProfilePinHash, setStoredPinHash, getProfilePinHash } from '../utils/pin';
@@ -10,6 +10,7 @@ import { usePinKeypad } from '../hooks/usePinKeypad';
 
 export default function PinSetup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useAppStore();
   const session = useAuthStore((state) => state.session);
   const setPinVerified = useAuthStore((state) => state.setPinVerified);
@@ -87,10 +88,18 @@ export default function PinSetup() {
       const inputHash = await hashPin(pin);
 
       if (inputHash === dbPinHash) {
-        setStoredPinHash(session.user.id, inputHash);
-        setPinVerified(true);
-        toast.success('ยินดีต้อนรับกลับ');
-        navigate('/dashboard', { replace: true });
+        // ถ้ารหัสเดิมถูก เช็คว่ามาจากการกด "เปลี่ยน PIN" จากหน้า Settings หรือไม่
+        if (location.state?.action === 'change') {
+          toast.success('รหัสเก่าถูกต้อง กรุณาตั้งรหัสใหม่');
+          setMode('setup');
+          setStep(1);
+          setPin('');
+        } else {
+          setStoredPinHash(session.user.id, inputHash);
+          setPinVerified(true);
+          toast.success('ยินดีต้อนรับกลับ');
+          navigate('/dashboard', { replace: true });
+        }
       } else {
         toast.error('รหัส PIN ไม่ถูกต้อง');
         setPin('');

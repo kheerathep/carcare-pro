@@ -458,7 +458,7 @@ export default function Settings() {
 
                         <div className="flex gap-3 mb-6">
                             <button onClick={() => setIsPinModalOpen(false)} className="flex-1 px-4 py-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors">ยกเลิก</button>
-                            <button onClick={() => navigate('/pin-setup')} className="flex-1 px-4 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition-all">เปลี่ยน PIN</button>
+                            <button onClick={() => navigate('/pin-setup', { state: { action: 'change' } })} className="flex-1 px-4 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition-all">เปลี่ยน PIN</button>
                         </div>
 
                         <button onClick={() => { setIsPinModalOpen(false); navigate('/forgot-pin'); }} className="text-sm font-bold text-primary-600 dark:text-primary-400 hover:underline">
